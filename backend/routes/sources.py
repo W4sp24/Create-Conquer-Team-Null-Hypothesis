@@ -1,169 +1,163 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from typing import List
-from datetime import datetime
-import uuid
+"""
+POST /sources/upload — Ingest file → org_collection ChromaDB
+GET /sources — List all uploaded sources with metadata
+DELETE /sources/{filename} — Remove all chunks for a source
+"""
+
 import os
-from models import SourceUploadResponse, SourceListResponse, SourceMetadata
+from datetime import datetime
+from typing import List
+
+from fastapi import APIRouter, UploadFile, File, HTTPException
+
+from models import SourceMetadata
 
 router = APIRouter()
 
-# In-memory storage for source metadata
-sources_metadata: dict[str, SourceMetadata] = {}
-
-# Directory for storing uploaded files (in production, use proper storage)
-UPLOAD_DIR = "knowledge_base/chroma_db/org_uploads"
+# Directory for storing uploaded organization files
+ORG_UPLOADS_DIR = "./knowledge_base/chroma_db/org_uploads"
 
 
-@router.post("/sources/upload", response_model=SourceUploadResponse)
-async def upload_source(file: UploadFile = File(...)):
+@router.post("/sources/upload")
+async def upload_source(file: UploadFile = File(...)) -> dict:
     """
     Ingest file → org_collection ChromaDB
     
-    Uploads a source document to the organization's knowledge base.
-    Chunks and embeds the document into ChromaDB for retrieval.
+    Purpose: Ingest file → org_collection ChromaDB
+    
+    Accepts PDFs, DOCX, TXT files. Chunks them and stores in the
+    organization's ChromaDB collection for retrieval during pipeline execution.
     """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
     # Validate file type
-    allowed_extensions = ['.pdf', '.docx', '.txt', '.doc']
+    allowed_extensions = {'.pdf', '.docx', '.txt', '.doc'}
     file_ext = os.path.splitext(file.filename)[1].lower()
     
     if file_ext not in allowed_extensions:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
         )
     
     try:
-        # Read file content
-        contents = await file.read()
-        file_size = len(contents)
+        # Ensure upload directory exists
+        os.makedirs(ORG_UPLOADS_DIR, exist_ok=True)
         
-        # Generate unique filename
-        file_id = str(uuid.uuid4())
-        safe_filename = f"{file_id}_{file.filename}"
-        
-        # Save file (in production, save to proper storage)
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        file_path = os.path.join(UPLOAD_DIR, safe_filename)
+        # Save file to disk
+        file_path = os.path.join(ORG_UPLOADS_DIR, file.filename)
+        content = await file.read()
         
         with open(file_path, 'wb') as f:
-            f.write(contents)
+            f.write(content)
         
-        # Simulate chunking and embedding
-        # In production, this would:
-        # 1. Extract text from PDF/DOCX
-        # 2. Chunk the text
+        # TODO: When feat/rag-layer merges, this will:
+        # 1. Extract text from the file
+        # 2. Chunk the content
         # 3. Embed chunks using sentence-transformers
         # 4. Store in ChromaDB org_collection
         
-        chunk_count = len(contents) // 1000  # Rough estimate
-        if chunk_count == 0:
-            chunk_count = 1
-        
-        # Store metadata
-        metadata = SourceMetadata(
-            filename=file.filename,
-            org_id="default_org",  # In production, get from auth
-            uploaded_at=datetime.utcnow(),
-            chunk_count=chunk_count,
-            file_type=file_ext,
-            file_size=file_size
-        )
-        
-        sources_metadata[safe_filename] = metadata
-        
-        return SourceUploadResponse(
-            message=f"Successfully ingested {file.filename}",
-            filename=safe_filename,
-            chunks_ingested=chunk_count
-        )
-        
+        # For now, just acknowledge the upload
+        return {
+            "filename": file.filename,
+            "status": "uploaded",
+            "message": "File uploaded successfully. RAG ingestion will be implemented when feat/rag-layer merges."
+        }
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file: {str(e)}"
+        )
 
 
-@router.get("/sources", response_model=SourceListResponse)
-async def list_sources():
+@router.get("/sources")
+async def list_sources() -> List[SourceMetadata]:
     """
     List all uploaded sources with metadata
     
-    Returns a list of all documents uploaded to the organization's knowledge base,
-    including metadata like upload date, chunk count, and file size.
-    """
-    sources = list(sources_metadata.values())
+    Purpose: List all uploaded sources with metadata
     
-    return SourceListResponse(sources=sources)
+    Returns list of all organization-uploaded documents with their metadata
+    (filename, chunk count, upload timestamp).
+    """
+    sources = []
+    
+    try:
+        # Check if directory exists
+        if not os.path.exists(ORG_UPLOADS_DIR):
+            return sources
+        
+        # List all files in the uploads directory
+        for filename in os.listdir(ORG_UPLOADS_DIR):
+            file_path = os.path.join(ORG_UPLOADS_DIR, filename)
+            
+            # Skip directories
+            if os.path.isdir(file_path):
+                continue
+            
+            # Get file stats
+            stat = os.stat(file_path)
+            uploaded_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            
+            # TODO: When feat/rag-layer merges, get actual chunk_count from ChromaDB
+            # For now, use placeholder
+            chunk_count = 0
+            
+            sources.append(SourceMetadata(
+                filename=filename,
+                source_type="org_upload",
+                chunk_count=chunk_count,
+                uploaded_at=uploaded_at
+            ))
+        
+        return sources
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list sources: {str(e)}"
+        )
 
 
 @router.delete("/sources/{filename}")
-async def delete_source(filename: str):
+async def delete_source(filename: str) -> dict:
     """
     Remove all chunks for a source
     
-    Deletes a source document and all its chunks from the knowledge base.
-    """
-    if filename not in sources_metadata:
-        raise HTTPException(status_code=404, detail="Source not found")
+    Purpose: Remove all chunks for a source
     
+    Deletes the file and removes all associated chunks from ChromaDB.
+    """
     try:
-        # Delete file from storage
-        file_path = os.path.join(UPLOAD_DIR, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        file_path = os.path.join(ORG_UPLOADS_DIR, filename)
         
-        # Remove from ChromaDB (in production)
-        # chroma_client.delete_by_filename(filename)
+        # Check if file exists
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Source '{filename}' not found"
+            )
         
-        # Remove metadata
-        del sources_metadata[filename]
+        # Delete the file
+        os.remove(file_path)
+        
+        # TODO: When feat/rag-layer merges, also delete chunks from ChromaDB
+        # using the ingestor/retriever modules
         
         return {
-            "message": f"Successfully deleted {filename}",
-            "filename": filename
+            "filename": filename,
+            "status": "deleted",
+            "message": "Source deleted successfully"
         }
-        
+    
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting source: {str(e)}")
-
-
-@router.get("/sources/{filename}/metadata")
-async def get_source_metadata(filename: str):
-    """Get metadata for a specific source"""
-    if filename not in sources_metadata:
-        raise HTTPException(status_code=404, detail="Source not found")
-    
-    return sources_metadata[filename]
-
-
-@router.get("/sources/{filename}/chunks")
-async def get_source_chunks(filename: str):
-    """
-    Get all chunks for a source document
-    
-    Returns all text chunks that were extracted from the source document.
-    Useful for debugging and verification.
-    """
-    if filename not in sources_metadata:
-        raise HTTPException(status_code=404, detail="Source not found")
-    
-    # In production, query ChromaDB for all chunks with this filename
-    # For now, return mock data
-    
-    metadata = sources_metadata[filename]
-    
-    return {
-        "filename": filename,
-        "chunk_count": metadata.chunk_count,
-        "chunks": [
-            {
-                "chunk_id": i,
-                "text": f"Sample chunk {i} from {filename}",
-                "metadata": {
-                    "source": filename,
-                    "chunk_index": i
-                }
-            }
-            for i in range(min(metadata.chunk_count, 10))  # Return first 10 chunks
-        ]
-    }
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete source: {str(e)}"
+        )
 
 # Made with Bob

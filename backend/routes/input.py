@@ -1,155 +1,118 @@
+"""
+POST /upload — Parse Excel → structured JSON preview
+POST /chat — Process chat message → return next guided question
+"""
+
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from typing import Dict, Any
-import pandas as pd
-import io
-from models import ChatMessage, ChatResponse, UploadResponse
-import uuid
+from pydantic import BaseModel
+
+from models import ExcelRow, ChatMessage
+from parsers.excel_parser import parse_excel
 
 router = APIRouter()
 
-# In-memory storage for chat sessions and parsed data
-chat_sessions: Dict[str, Dict[str, Any]] = {}
-uploaded_data: Dict[str, Dict[str, Any]] = {}
+
+class UploadResponse(BaseModel):
+    """Response from Excel upload with parsed data preview."""
+    rows: list[ExcelRow]
+    row_count: int
 
 
-@router.post("/upload", response_model=UploadResponse)
-async def upload_excel(file: UploadFile = File(...)):
+class ChatRequest(BaseModel):
+    """Request body for chat endpoint."""
+    message: str
+    excel_data: list[ExcelRow] | None = None
+
+
+class ChatResponse(BaseModel):
+    """Response from chat endpoint with next guided question."""
+    question: str
+    role: str = "assistant"
+
+
+@router.post("/upload")
+async def upload_excel(file: UploadFile = File(...)) -> UploadResponse:
     """
     Parse Excel → structured JSON preview
     
-    Parses Excel file into structured JSON rows. Column headers are
-    interpreted by the Data Analyst agent — no rigid column name mapping required.
+    Purpose: Parse Excel → structured JSON preview
     """
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported")
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only .xlsx and .xls files are supported."
+        )
     
     try:
-        # Read Excel file
-        contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
+        # Read file content
+        content = await file.read()
         
-        # Convert to JSON structure
-        data_json = df.to_dict(orient='records')
-        
-        # Store parsed data with a session ID
-        session_id = str(uuid.uuid4())
-        uploaded_data[session_id] = {
-            'filename': file.filename,
-            'data': data_json,
-            'columns': list(df.columns),
-            'row_count': len(df)
-        }
-        
-        # Create preview (first 5 rows)
-        preview = {
-            'columns': list(df.columns),
-            'sample_rows': data_json[:5],
-            'session_id': session_id
-        }
+        # Parse Excel using the excel_parser module
+        rows = parse_excel(content)
         
         return UploadResponse(
-            message=f"Successfully parsed {file.filename}",
-            preview=preview,
-            row_count=len(df)
+            rows=rows,
+            row_count=len(rows)
         )
-        
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing Excel file: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse Excel file: {str(e)}"
+        )
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def process_chat(message: ChatMessage):
+@router.post("/chat")
+async def process_chat(request: ChatRequest) -> ChatResponse:
     """
     Process chat message → return next guided question
     
-    After Excel upload, the system reads the data and asks smart data-aware questions
-    ("I can see 5,000 beneficiaries — what is your budget?"). User can type freely at any point.
-    Captures budget, staff, constraints, local context.
+    Purpose: Process chat message → return next guided question
+    
+    After Excel upload, the system reads the data and asks smart data-aware
+    guided questions. User can type freely at any point. Captures budget,
+    staff, constraints, local context.
     """
-    session_id = message.session_id or str(uuid.uuid4())
+    # This is a guided chat system that asks contextual questions
+    # based on the uploaded Excel data
     
-    # Initialize session if new
-    if session_id not in chat_sessions:
-        chat_sessions[session_id] = {
-            'messages': [],
-            'context': {},
-            'question_index': 0
-        }
+    # For MVP, we'll implement a simple question flow
+    # In production, this would use an LLM to generate smart questions
     
-    session = chat_sessions[session_id]
+    message_lower = request.message.lower()
     
-    # Store user message
-    session['messages'].append({
-        'role': 'user',
-        'content': message.message
-    })
+    # Check if user has uploaded data
+    if not request.excel_data:
+        return ChatResponse(
+            question="Please upload your Excel file first to begin the assessment."
+        )
     
-    # Parse user input for context extraction (simplified)
-    # In production, this would use NLP/LLM to extract structured info
-    user_msg_lower = message.message.lower()
+    # Analyze what information we might be missing
+    # This is a simplified version - production would use LLM
     
-    # Extract context from message
-    if 'budget' in user_msg_lower or '$' in message.message:
-        # Try to extract budget amount
-        import re
-        numbers = re.findall(r'\d+(?:,\d{3})*(?:\.\d+)?', message.message.replace(',', ''))
-        if numbers:
-            session['context']['budget'] = float(numbers[0])
+    if "budget" not in message_lower and "cost" not in message_lower:
+        return ChatResponse(
+            question=f"I can see {len(request.excel_data)} beneficiaries in your data. What is your available budget for this program?"
+        )
     
-    if 'staff' in user_msg_lower or 'people' in user_msg_lower:
-        import re
-        numbers = re.findall(r'\d+', message.message)
-        if numbers:
-            session['context']['staff_count'] = int(numbers[0])
+    if "staff" not in message_lower and "team" not in message_lower:
+        return ChatResponse(
+            question="How many staff members do you have available for program implementation?"
+        )
     
-    # Determine next question based on what we have
-    questions = [
-        "What is your total budget for this program?",
-        "How many staff members do you have available?",
-        "What are the main constraints or challenges you're facing?",
-        "Can you describe the local context or any cultural considerations?",
-        "Is there anything else important I should know about your situation?"
-    ]
+    if "constraint" not in message_lower and "challenge" not in message_lower:
+        return ChatResponse(
+            question="Are there any specific constraints or challenges in your region that we should consider (e.g., seasonal factors, infrastructure limitations)?"
+        )
     
-    # Get next question
-    question_index = session['question_index']
-    if question_index < len(questions):
-        next_question = questions[question_index]
-        session['question_index'] += 1
-    else:
-        next_question = "Thank you! I have all the information I need. You can now run the pipeline."
+    if "timeline" not in message_lower and "duration" not in message_lower:
+        return ChatResponse(
+            question="What is your preferred timeline for program implementation?"
+        )
     
-    # Store assistant response
-    session['messages'].append({
-        'role': 'assistant',
-        'content': next_question
-    })
-    
+    # If we've covered the basics, acknowledge and prepare for pipeline
     return ChatResponse(
-        question=next_question,
-        session_id=session_id
+        question="Thank you for providing that information. I have everything I need to generate a customized program. Click 'Run' when you're ready to proceed."
     )
-
-
-@router.get("/chat/{session_id}/context")
-async def get_chat_context(session_id: str):
-    """Get the extracted context from a chat session"""
-    if session_id not in chat_sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    return {
-        'session_id': session_id,
-        'context': chat_sessions[session_id]['context'],
-        'messages': chat_sessions[session_id]['messages']
-    }
-
-
-@router.get("/upload/{session_id}/data")
-async def get_uploaded_data(session_id: str):
-    """Get the uploaded Excel data for a session"""
-    if session_id not in uploaded_data:
-        raise HTTPException(status_code=404, detail="Upload session not found")
-    
-    return uploaded_data[session_id]
 
 # Made with Bob

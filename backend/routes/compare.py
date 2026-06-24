@@ -1,216 +1,105 @@
-from fastapi import APIRouter, HTTPException
-from models import CompareRequest, CompareResponse, ProgramOutput
-from typing import Dict, Any
+"""
+POST /compare — Run two context profiles → side-by-side programs
+"""
+
+import asyncio
+import uuid
+
+from fastapi import APIRouter
+
+from models import CompareRequest, ProgramOutput
+from orchestrator import run_pipeline
 
 router = APIRouter()
 
 
-@router.post("/compare", response_model=CompareResponse)
-async def compare_programs(request: CompareRequest):
+@router.post("/compare")
+async def compare_profiles(request: CompareRequest) -> dict:
     """
     Run two context profiles → side-by-side programs
     
-    Executes the pipeline twice with different context profiles and returns
-    both programs side-by-side for comparison. This is the demo's core differentiator -
-    showing how the same need + different context = different solution.
-    """
-    try:
-        # In production, this would:
-        # 1. Run pipeline with context1
-        # 2. Run pipeline with context2
-        # 3. Compare the outputs
-        # 4. Highlight differences
-        
-        # For now, return mock comparison data
-        
-        # Simulate program 1
-        program1 = ProgramOutput(
-            run_id="compare_run_1",
-            intervention={
-                "title": "Improved Seed Distribution - Context 1",
-                "description": "Adapted for high-resource setting",
-                "activities": [
-                    "Direct seed distribution",
-                    "Training workshops",
-                    "Follow-up monitoring"
-                ]
-            },
-            adaptations_mode={
-                "infrastructure": "Good road access enables direct distribution",
-                "cultural": "Community meetings preferred",
-                "governance": "Strong local leadership"
-            },
-            rollout={
-                "phases": [
-                    {"phase": 1, "duration": "2 months", "activities": ["Setup"]},
-                    {"phase": 2, "duration": "4 months", "activities": ["Distribution"]},
-                    {"phase": 3, "duration": "2 months", "activities": ["Monitoring"]}
-                ],
-                "timeline": "8 months total"
-            },
-            budget={
-                "total": request.context1.budget or 100000,
-                "per_beneficiary": 20,
-                "breakdown": {
-                    "seeds": 40000,
-                    "training": 30000,
-                    "monitoring": 20000,
-                    "admin": 10000
-                }
-            },
-            kpis={
-                "primary": [
-                    {"name": "Beneficiaries reached", "target": 5000},
-                    {"name": "Yield increase", "target": "25%"}
-                ],
-                "secondary": [
-                    {"name": "Training completion", "target": "90%"}
-                ]
-            },
-            risk={
-                "level": "low",
-                "factors": [
-                    {"risk": "Weather dependency", "mitigation": "Flexible timeline"},
-                    {"risk": "Seed quality", "mitigation": "Certified suppliers"}
-                ]
-            },
-            citations=[
-                {"source": "FAO Guidelines 2023", "type": "specialized"},
-                {"source": "Local survey data", "type": "org_upload"}
-            ]
-        )
-        
-        # Simulate program 2 with different adaptations
-        program2 = ProgramOutput(
-            run_id="compare_run_2",
-            intervention={
-                "title": "Improved Seed Distribution - Context 2",
-                "description": "Adapted for low-resource setting",
-                "activities": [
-                    "Hub-based distribution",
-                    "Peer-to-peer training",
-                    "Mobile monitoring"
-                ]
-            },
-            adaptations_mode={
-                "infrastructure": "Limited road access requires hub model",
-                "cultural": "Individual consultations preferred",
-                "governance": "Decentralized decision-making"
-            },
-            rollout={
-                "phases": [
-                    {"phase": 1, "duration": "3 months", "activities": ["Hub setup"]},
-                    {"phase": 2, "duration": "6 months", "activities": ["Distribution"]},
-                    {"phase": 3, "duration": "3 months", "activities": ["Monitoring"]}
-                ],
-                "timeline": "12 months total"
-            },
-            budget={
-                "total": request.context2.budget or 100000,
-                "per_beneficiary": 20,
-                "breakdown": {
-                    "seeds": 35000,
-                    "hubs": 25000,
-                    "training": 25000,
-                    "monitoring": 15000
-                }
-            },
-            kpis={
-                "primary": [
-                    {"name": "Beneficiaries reached", "target": 5000},
-                    {"name": "Yield increase", "target": "20%"}
-                ],
-                "secondary": [
-                    {"name": "Hub utilization", "target": "80%"}
-                ]
-            },
-            risk={
-                "level": "medium",
-                "factors": [
-                    {"risk": "Access challenges", "mitigation": "Hub network"},
-                    {"risk": "Communication gaps", "mitigation": "Peer trainers"}
-                ]
-            },
-            citations=[
-                {"source": "FAO Guidelines 2023", "type": "specialized"},
-                {"source": "Regional assessment", "type": "org_upload"}
-            ]
-        )
-        
-        # Identify key differences
-        differences = {
-            "intervention_approach": {
-                "context1": "Direct distribution",
-                "context2": "Hub-based distribution",
-                "reason": "Infrastructure constraints"
-            },
-            "timeline": {
-                "context1": "8 months",
-                "context2": "12 months",
-                "reason": "Access challenges require longer rollout"
-            },
-            "training_method": {
-                "context1": "Workshops",
-                "context2": "Peer-to-peer",
-                "reason": "Cultural preferences differ"
-            },
-            "risk_level": {
-                "context1": "Low",
-                "context2": "Medium",
-                "reason": "Infrastructure and access challenges"
-            },
-            "budget_allocation": {
-                "context1": "Higher training investment",
-                "context2": "Higher hub infrastructure investment",
-                "reason": "Different delivery models"
-            }
-        }
-        
-        return CompareResponse(
-            program1=program1,
-            program2=program2,
-            differences=differences
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error comparing programs: {str(e)}")
-
-
-@router.get("/compare/example")
-async def get_comparison_example():
-    """
-    Get an example comparison to demonstrate the feature
+    Purpose: Run two context profiles → side-by-side programs
     
-    Returns a pre-built comparison showing how different contexts
-    lead to different program designs.
+    Takes two different chat context profiles (same Excel, two different chat
+    contexts) and runs the pipeline for both. Returns two complete programs
+    side-by-side for comparison. This is the demo's core differentiator —
+    showing how the same data produces different solutions based on context.
     """
+    # Generate unique run IDs for both profiles
+    run_id_a = str(uuid.uuid4())
+    run_id_b = str(uuid.uuid4())
+    
+    # Create SSE queues (not used in compare, but required by orchestrator)
+    queue_a: asyncio.Queue = asyncio.Queue()
+    queue_b: asyncio.Queue = asyncio.Queue()
+    
+    # Run both pipelines in parallel
+    program_a, program_b = await asyncio.gather(
+        run_pipeline(request.profile_a, run_id_a, queue_a),
+        run_pipeline(request.profile_b, run_id_b, queue_b),
+        return_exceptions=True,
+    )
+    
+    # Handle exceptions
+    if isinstance(program_a, Exception):
+        program_a = ProgramOutput(
+            run_id=run_id_a,
+            title="Error: Pipeline A failed",
+            target_beneficiaries="N/A",
+            intervention={
+                "intervention_name": "Error",
+                "description": str(program_a),
+                "adaptations": [],
+                "implementation_steps": [],
+            },
+            rollout_phases=[],
+            staff_roles=[],
+            per_beneficiary_cost_usd=None,
+            total_budget_estimate=None,
+            kpis=[],
+            risk_assessment={
+                "risk_level": "unknown",
+                "risk_flags": ["Pipeline failed"],
+                "mitigations": [],
+                "kpis": [],
+                "confidence_score": 0.0,
+            },
+            adaptations_made=[],
+            citations=[],
+            confidence_level=0.0,
+        )
+    
+    if isinstance(program_b, Exception):
+        program_b = ProgramOutput(
+            run_id=run_id_b,
+            title="Error: Pipeline B failed",
+            target_beneficiaries="N/A",
+            intervention={
+                "intervention_name": "Error",
+                "description": str(program_b),
+                "adaptations": [],
+                "implementation_steps": [],
+            },
+            rollout_phases=[],
+            staff_roles=[],
+            per_beneficiary_cost_usd=None,
+            total_budget_estimate=None,
+            kpis=[],
+            risk_assessment={
+                "risk_level": "unknown",
+                "risk_flags": ["Pipeline failed"],
+                "mitigations": [],
+                "kpis": [],
+                "confidence_score": 0.0,
+            },
+            adaptations_made=[],
+            citations=[],
+            confidence_level=0.0,
+        )
+    
     return {
-        "title": "Coastal vs Mountain Rice Farming",
-        "description": "Same need (improve rice yield), different contexts",
-        "context1": {
-            "name": "Coastal Region",
-            "characteristics": [
-                "Flat terrain",
-                "Good road access",
-                "High population density",
-                "Irrigation available"
-            ]
-        },
-        "context2": {
-            "name": "Mountain Region",
-            "characteristics": [
-                "Steep terrain",
-                "Limited road access",
-                "Low population density",
-                "Rain-fed agriculture"
-            ]
-        },
-        "key_differences": [
-            "Distribution method (direct vs hub-based)",
-            "Timeline (8 months vs 12 months)",
-            "Training approach (workshops vs peer-to-peer)",
-            "Risk level (low vs medium)"
-        ]
+        "profile_a": program_a,
+        "profile_b": program_b,
     }
 
 # Made with Bob

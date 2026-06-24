@@ -1,17 +1,9 @@
 """
-Routes package - exports all API routers
+Routes package — exports all API routers for main.py registration.
 """
 
-from .input import router as input_router
-from .run import router as run_router
-from .sources import router as sources_router
-from .compare import router as compare_router
+from . import run, input, sources, compare
 
-__all__ = [
-    'input_router',
-    'run_router', 
-    'sources_router',
-    'compare_router'
-]
+__all__ = ["run", "input", "sources", "compare"]
 
 # Made with Bob
