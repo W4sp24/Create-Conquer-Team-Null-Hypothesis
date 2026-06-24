@@ -17,27 +17,30 @@ from agents.data_analyst import run_data_analyst
 from agents.intervention_adapter import run_intervention_adapter
 from agents.risk_mne_agent import run_risk_mne_agent
 from agents.synthesizer import run_synthesizer
+from agents.evidence_retriever import run_evidence_retriever
 
 
 async def _push_sse(queue: asyncio.Queue, agent: str, status: str) -> None:
     await queue.put(SSEEvent(agent=agent, status=status))
 
 
-# ── Phase 1 stub ───────────────────────────────────────────────────────────────
+# ── Phase 1 — retrieval gate ─────────────────────────────────────────────────────
 
-async def _run_evidence_retriever_stub(
+async def _safe_evidence_retriever(
     context: ContextPayload,
     sse_queue: asyncio.Queue,
 ) -> RetrievedDocs:
-    await _push_sse(sse_queue, "evidence_retriever", "running")
-    await asyncio.sleep(0)
-    result = RetrievedDocs(specialized=[], org_uploads=[])
-    await _push_sse(sse_queue, "evidence_retriever", "done")
-    return result
+    """Run the real evidence retriever, but never let it block the pipeline.
 
-
-# ── Phase 2 stubs ──────────────────────────────────────────────────────────────
-
+    `run_evidence_retriever` pushes its own running/done SSE events. If it raises
+    (e.g. embedding model unavailable offline), emit `done` and fall back to empty
+    docs so the analysis agents still run.
+    """
+    try:
+        return await run_evidence_retriever(context, sse_queue)
+    except Exception:
+        await _push_sse(sse_queue, "evidence_retriever", "done")
+        return RetrievedDocs(specialized=[], org_uploads=[])
 
 
 # ── Main pipeline entry point ──────────────────────────────────────────────────
@@ -48,7 +51,7 @@ async def run_pipeline(
     sse_queue: asyncio.Queue,
 ) -> ProgramOutput:
     # Phase 1 — retrieval gate (runs alone before analysis agents)
-    retrieved = await _run_evidence_retriever_stub(context, sse_queue)
+    retrieved = await _safe_evidence_retriever(context, sse_queue)
 
     # Phase 2 — 3 MVP agents in parallel
     analyst, adapter, risk = await asyncio.gather(

@@ -5,8 +5,10 @@
 
 import type {
   ChatMessage,
+  CompareResponse,
   ContextFieldKey,
   ContextPayload,
+  ProgramOutput,
   SourceMetadata,
   UploadPreview,
 } from '../types'
@@ -35,16 +37,11 @@ async function tryJson<T>(input: RequestInfo, init?: RequestInit): Promise<T | n
  * the caller can render the error chip.
  */
 export async function uploadExcel(file: File): Promise<UploadPreview> {
-  const preview = await parseExcelClient(file)
-
-  const form = new FormData()
-  form.append('file', file)
-  const backend = await tryJson<Partial<UploadPreview>>('/api/upload', {
-    method: 'POST',
-    body: form,
-  })
-
-  return backend ? { ...preview, ...backend, excelData: preview.excelData } : preview
+  // Parsing is authoritative client-side (SheetJS) — it yields the full preview
+  // (rows/cols/headers/sampleRows/excelData) that the UI and ContextPayload need.
+  // The backend POST /upload returns a different shape ({rows, row_count}) and
+  // adds nothing the client lacks, so we don't merge it back in.
+  return parseExcelClient(file)
 }
 
 /**
@@ -80,4 +77,45 @@ export async function startRun(payload: ContextPayload): Promise<string> {
     body: JSON.stringify(payload),
   })
   return backend?.run_id ?? mockRunId()
+}
+
+/**
+ * Fetch the completed program for a run. Returns null while the pipeline is
+ * still running (GET /result/{run_id} 404s until it finishes) so callers can poll.
+ */
+export async function getResult(runId: string): Promise<ProgramOutput | null> {
+  return tryJson<ProgramOutput>(`/api/result/${encodeURIComponent(runId)}`)
+}
+
+/** Run two context profiles and return both programs side-by-side. */
+export async function compareProfiles(
+  profileA: ContextPayload,
+  profileB: ContextPayload,
+): Promise<CompareResponse | null> {
+  return tryJson<CompareResponse>('/api/compare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile_a: profileA, profile_b: profileB }),
+  })
+}
+
+/** Ingest a document into the org knowledge base. */
+export async function uploadSource(
+  file: File,
+): Promise<{ filename: string; status: string; chunk_count: number } | null> {
+  const form = new FormData()
+  form.append('file', file)
+  return tryJson('/api/sources/upload', { method: 'POST', body: form })
+}
+
+/** Remove a source (all its chunks) from the org knowledge base. */
+export async function deleteSource(filename: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/sources/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }

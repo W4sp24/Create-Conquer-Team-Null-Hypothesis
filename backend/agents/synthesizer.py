@@ -11,7 +11,17 @@ from models import (
     SSEEvent,
 )
 from agents.base import call_llm, extract_json
-from config import GEMINI_MAIN
+from config import GEMINI_MAIN, GROQ_LARGE
+
+
+async def _synthesize_llm(user_prompt: str, system_prompt: str) -> str:
+    """Synthesize with Gemini (best quality); on failure — e.g. Gemini free-tier
+    quota/429 — degrade to a Groq model so we still get real LLM synthesis rather
+    than the static fallback."""
+    try:
+        return await call_llm("gemini", GEMINI_MAIN, user_prompt, system_prompt=system_prompt)
+    except Exception:
+        return await call_llm("groq", GROQ_LARGE, user_prompt, system_prompt=system_prompt)
 
 
 async def run_synthesizer(
@@ -80,13 +90,8 @@ Rules:
 
 Create a complete program document as JSON."""
 
-        # Call LLM for the parts that need generation
-        raw_response = await call_llm(
-            provider="gemini",
-            model=GEMINI_MAIN,
-            prompt=user_prompt,
-            system_prompt=system_prompt,
-        )
+        # Call LLM for the parts that need generation (Gemini → Groq fallback)
+        raw_response = await _synthesize_llm(user_prompt, system_prompt)
         
         # Parse JSON
         parsed = extract_json(raw_response)

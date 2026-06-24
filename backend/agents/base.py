@@ -58,7 +58,27 @@ def _call_gemini(model: str, system_prompt: str, user_prompt: str) -> str:
 
 
 def extract_json(text: str) -> dict | list:
-    """Strip markdown fences if present, then parse JSON. Used by all agents."""
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    raw = match.group(1) if match else text.strip()
-    return json.loads(raw)
+    """Parse JSON from an LLM response. Used by all agents.
+
+    Tolerant of how different models wrap output: ```json fences, bare ```
+    fences, and JSON preceded/followed by prose. Falls back to slicing the first
+    balanced object/array out of the text.
+    """
+    s = text.strip()
+
+    # Strip a fenced code block — either ```json … ``` or a bare ``` … ```.
+    fence = re.search(r"```(?:json)?\s*(.*?)\s*```", s, re.DOTALL)
+    if fence:
+        s = fence.group(1).strip()
+
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        # Last resort: grab the first {...} or [...] span and parse that.
+        starts = [i for i in (s.find("{"), s.find("[")) if i != -1]
+        if starts:
+            start = min(starts)
+            end = max(s.rfind("}"), s.rfind("]"))
+            if end > start:
+                return json.loads(s[start : end + 1])
+        raise

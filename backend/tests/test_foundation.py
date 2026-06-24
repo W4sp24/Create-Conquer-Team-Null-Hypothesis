@@ -378,9 +378,17 @@ class TestConfig:
         assert config.CHUNK_OVERLAP < config.CHUNK_SIZE
 
     def test_known_groq_models(self):
-        assert "llama" in config.GROQ_FAST
-        assert "llama" in config.GROQ_LARGE
-        assert "gemma" in config.GROQ_EVAL
+        # Must match Groq's current production lineup
+        # (gemma2-9b-it was decommissioned; GROQ_EVAL → openai/gpt-oss-20b)
+        KNOWN_GROQ_MODELS = {
+            "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+        }
+        assert config.GROQ_FAST in KNOWN_GROQ_MODELS
+        assert config.GROQ_LARGE in KNOWN_GROQ_MODELS
+        assert config.GROQ_EVAL in KNOWN_GROQ_MODELS
 
     def test_known_gemini_model(self):
         assert "gemini" in config.GEMINI_MAIN

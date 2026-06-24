@@ -3,6 +3,7 @@ import InputPage from './pages/InputPage'
 import AgentStatusPage from './pages/AgentStatusPage'
 import OutputPage from './pages/OutputPage'
 import SourcesPage from './pages/SourcesPage'
+import CompareView from './components/CompareView'
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
       <Route path="/status" element={<AgentStatusPage />} />
       <Route path="/output" element={<OutputPage />} />
       <Route path="/sources" element={<SourcesPage />} />
+      <Route path="/compare" element={<CompareView />} />
     </Routes>
   )
 }

@@ -27,6 +27,69 @@ export interface SSEEvent {
   status: 'pending' | 'running' | 'done' | 'error'
 }
 
+// ── Agent analysis outputs (backend/models.py) ───────────────────────────────
+
+export interface DataAnalystOutput {
+  beneficiary_count: number | null
+  crop_type: string | null
+  region: string | null
+  baseline_yield_t_ha: number | null
+  income_drop_pct: number | null
+  staff_count: number | null
+  raw_metrics: Record<string, unknown>
+}
+
+export interface InterventionAdapterOutput {
+  intervention_name: string
+  description: string
+  adaptations: string[]
+  implementation_steps: string[]
+}
+
+export interface KPI {
+  name: string
+  target: string
+  measurement: string
+}
+
+export interface RiskMneOutput {
+  risk_level: string // "low" | "medium" | "high" | "unknown"
+  risk_flags: string[]
+  mitigations: string[]
+  kpis: KPI[]
+  confidence_score: number // 0.0–1.0
+}
+
+export interface RolloutPhase {
+  phase: number
+  name: string
+  duration: string
+  activities: string[]
+}
+
+/** The final generated program (backend ProgramOutput). */
+export interface ProgramOutput {
+  run_id: string
+  title: string
+  target_beneficiaries: string
+  intervention: InterventionAdapterOutput
+  rollout_phases: RolloutPhase[]
+  staff_roles: string[]
+  per_beneficiary_cost_usd: number | null
+  total_budget_estimate: string | null
+  kpis: KPI[]
+  risk_assessment: RiskMneOutput
+  adaptations_made: string[]
+  citations: string[]
+  confidence_level: number // 0.0–1.0
+}
+
+/** Response from POST /compare — two programs from two context profiles. */
+export interface CompareResponse {
+  profile_a: ProgramOutput
+  profile_b: ProgramOutput
+}
+
 // ── UI-only types ────────────────────────────────────────────────────────────
 
 /** Result of parsing an uploaded Excel file (real or mocked). */
