@@ -132,5 +132,5 @@ class TestMainApp:
 
     def test_health_route_exists(self):
         from main import app
-        routes = [r.path for r in app.routes]
+        routes = [r.path for r in app.routes if hasattr(r, "path")]
         assert "/health" in routes

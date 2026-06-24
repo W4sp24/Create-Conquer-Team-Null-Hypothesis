@@ -1,163 +1,86 @@
 """
-POST /sources/upload — Ingest file → org_collection ChromaDB
-GET /sources — List all uploaded sources with metadata
+POST /sources/upload — Ingest file into org_collection ChromaDB
+GET  /sources        — List all uploaded sources with metadata
 DELETE /sources/{filename} — Remove all chunks for a source
 """
 
+import asyncio
 import os
-from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from models import SourceMetadata
+from rag.chroma_client import org_collection
+from rag.ingestor import ingest_file, delete_source, list_sources
 
 router = APIRouter()
 
-# Directory for storing uploaded organization files
 ORG_UPLOADS_DIR = "./knowledge_base/chroma_db/org_uploads"
+_ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
 
 @router.post("/sources/upload")
 async def upload_source(file: UploadFile = File(...)) -> dict:
-    """
-    Ingest file → org_collection ChromaDB
-    
-    Purpose: Ingest file → org_collection ChromaDB
-    
-    Accepts PDFs, DOCX, TXT files. Chunks them and stores in the
-    organization's ChromaDB collection for retrieval during pipeline execution.
-    """
+    """Ingest an org document into ChromaDB and return chunk count."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
-    
-    # Validate file type
-    allowed_extensions = {'.pdf', '.docx', '.txt', '.doc'}
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    
-    if file_ext not in allowed_extensions:
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in _ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+            detail=f"Unsupported file type. Allowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
         )
-    
+
+    content = await file.read()
+
+    os.makedirs(ORG_UPLOADS_DIR, exist_ok=True)
+    file_path = os.path.join(ORG_UPLOADS_DIR, file.filename)
+    with open(file_path, "wb") as f:
+        f.write(content)
+
     try:
-        # Ensure upload directory exists
-        os.makedirs(ORG_UPLOADS_DIR, exist_ok=True)
-        
-        # Save file to disk
-        file_path = os.path.join(ORG_UPLOADS_DIR, file.filename)
-        content = await file.read()
-        
-        with open(file_path, 'wb') as f:
-            f.write(content)
-        
-        # TODO: When feat/rag-layer merges, this will:
-        # 1. Extract text from the file
-        # 2. Chunk the content
-        # 3. Embed chunks using sentence-transformers
-        # 4. Store in ChromaDB org_collection
-        
-        # For now, just acknowledge the upload
-        return {
-            "filename": file.filename,
-            "status": "uploaded",
-            "message": "File uploaded successfully. RAG ingestion will be implemented when feat/rag-layer merges."
-        }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to upload file: {str(e)}"
+        n = await asyncio.to_thread(
+            ingest_file, file_path, org_collection, file.filename
         )
+    except Exception as exc:
+        os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}")
+
+    return {"filename": file.filename, "status": "ingested", "chunk_count": n}
 
 
 @router.get("/sources")
-async def list_sources() -> List[SourceMetadata]:
-    """
-    List all uploaded sources with metadata
-    
-    Purpose: List all uploaded sources with metadata
-    
-    Returns list of all organization-uploaded documents with their metadata
-    (filename, chunk count, upload timestamp).
-    """
-    sources = []
-    
-    try:
-        # Check if directory exists
-        if not os.path.exists(ORG_UPLOADS_DIR):
-            return sources
-        
-        # List all files in the uploads directory
-        for filename in os.listdir(ORG_UPLOADS_DIR):
-            file_path = os.path.join(ORG_UPLOADS_DIR, filename)
-            
-            # Skip directories
-            if os.path.isdir(file_path):
-                continue
-            
-            # Get file stats
-            stat = os.stat(file_path)
-            uploaded_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
-            
-            # TODO: When feat/rag-layer merges, get actual chunk_count from ChromaDB
-            # For now, use placeholder
-            chunk_count = 0
-            
-            sources.append(SourceMetadata(
-                filename=filename,
-                source_type="org_upload",
-                chunk_count=chunk_count,
-                uploaded_at=uploaded_at
-            ))
-        
-        return sources
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list sources: {str(e)}"
+async def get_sources() -> list[SourceMetadata]:
+    """List all org-uploaded sources with chunk count and upload time."""
+    sources = await asyncio.to_thread(list_sources, org_collection)
+    return [
+        SourceMetadata(
+            filename=s["source_name"],
+            source_type="org_upload",
+            chunk_count=s["chunk_count"],
+            uploaded_at=s["uploaded_at"],
         )
+        for s in sources
+    ]
 
 
 @router.delete("/sources/{filename}")
-async def delete_source(filename: str) -> dict:
-    """
-    Remove all chunks for a source
-    
-    Purpose: Remove all chunks for a source
-    
-    Deletes the file and removes all associated chunks from ChromaDB.
-    """
-    try:
-        file_path = os.path.join(ORG_UPLOADS_DIR, filename)
-        
-        # Check if file exists
-        if not os.path.exists(file_path):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Source '{filename}' not found"
-            )
-        
-        # Delete the file
-        os.remove(file_path)
-        
-        # TODO: When feat/rag-layer merges, also delete chunks from ChromaDB
-        # using the ingestor/retriever modules
-        
-        return {
-            "filename": filename,
-            "status": "deleted",
-            "message": "Source deleted successfully"
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete source: {str(e)}"
-        )
+async def remove_source(filename: str) -> dict:
+    """Delete all chunks for a source from ChromaDB and remove the file."""
+    existing = await asyncio.to_thread(
+        org_collection.get,
+        where={"source": filename},
+        include=[],
+        limit=1,
+    )
+    if not existing["ids"]:
+        raise HTTPException(status_code=404, detail=f"Source '{filename}' not found")
 
-# Made with Bob
+    await asyncio.to_thread(delete_source, org_collection, filename)
+
+    file_path = os.path.join(ORG_UPLOADS_DIR, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    return {"filename": filename, "status": "deleted"}
