@@ -4,7 +4,6 @@ import TopNav from '../components/TopNav'
 import FloatingParticles from '../components/FloatingParticles'
 import ProgramOutputView from '../components/ProgramOutput'
 import { compareProfiles } from '../lib/api'
-import { mockRunId } from '../lib/mock'
 import type { CompareResponse, ContextPayload } from '../types'
 
 const PRESET_A =
@@ -27,7 +26,7 @@ export default function CompareView() {
     setFailed(false)
     setResult(null)
     const profile = (text: string): ContextPayload => ({
-      run_id: mockRunId(),
+      run_id: crypto.randomUUID(),
       excel_data: [],
       chat_messages: [{ role: 'user', content: text }],
     })
@@ -44,14 +43,14 @@ export default function CompareView() {
 
       <main className="relative z-10 mx-auto w-full max-w-[1200px] flex-1 px-4 py-10 sm:px-6">
         <div className="mb-6 animate-rise">
-          <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-forest">
-            <GitCompare size={12} className="text-leaf" />
+          <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-leaf-bright">
+            <GitCompare size={12} className="text-gold" />
             Compare View
           </div>
-          <h1 className="font-display text-[32px] font-semibold leading-tight tracking-headline text-primary">
+          <h1 className="font-display text-[32px] font-semibold leading-tight tracking-headline text-mist">
             Same need, two contexts
           </h1>
-          <p className="mt-2 text-body text-secondary">
+          <p className="mt-2 text-body text-mist-muted">
             Identical goal, different local conditions — see how the pipeline reshapes the program.
           </p>
         </div>

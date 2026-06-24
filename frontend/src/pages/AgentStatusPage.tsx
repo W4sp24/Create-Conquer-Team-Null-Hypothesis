@@ -52,18 +52,18 @@ export default function AgentStatusPage() {
 
       <main className="relative z-10 mx-auto w-full max-w-[920px] flex-1 px-4 py-10 sm:px-6">
         <div className="mb-8 animate-rise">
-          <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-forest">
-            <Sparkles size={12} className="text-leaf" />
+          <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-leaf-bright">
+            <Sparkles size={12} className="text-gold" />
             Agent Status
           </div>
-          <h1 className="font-display text-[34px] font-semibold leading-tight tracking-headline text-primary">
+          <h1 className="font-display text-[34px] font-semibold leading-tight tracking-headline text-mist">
             {done && !error
               ? 'Program assembled'
               : error
                 ? 'A step ran into trouble'
                 : 'Agents are working…'}
           </h1>
-          <p className="mt-2 text-body text-secondary">
+          <p className="mt-2 text-body text-mist-muted">
             {error
               ? 'The pipeline hit an error. You can still view whatever was produced, or retry from Input.'
               : `Five agents run as a pipeline — retrieval first, then analysis in parallel, then synthesis. ${completed}/${total} done.`}

@@ -1,13 +1,8 @@
-// Client-side fallback used when the backend routes are unavailable.
-// Excel parsing is REAL (SheetJS); the rest is canned demo data.
+// Real, client-side Excel parsing (SheetJS). This is the only client-side data
+// source — everything else (chat, sources, runs) comes from the live backend.
 
 import * as XLSX from 'xlsx'
-import type {
-  ChatMessage,
-  ContextFieldKey,
-  SourceMetadata,
-  UploadPreview,
-} from '../types'
+import type { UploadPreview } from '../types'
 
 const SAMPLE_ROW_LIMIT = 5
 
@@ -44,158 +39,53 @@ export async function parseExcelClient(file: File): Promise<UploadPreview> {
   }
 }
 
-/** Canned org-KB sources for the left panel when GET /sources is unavailable. */
-export function mockSources(): SourceMetadata[] {
-  return [
-    {
-      filename: 'cebu_baseline_2024.pdf',
-      source_type: 'org_upload',
-      chunk_count: 42,
-      uploaded_at: '2026-05-12T09:00:00Z',
-    },
-    {
-      filename: 'coastal_a_field_report.docx',
-      source_type: 'org_upload',
-      chunk_count: 18,
-      uploaded_at: '2026-05-20T14:30:00Z',
-    },
-    {
-      filename: 'irrigation_notes.txt',
-      source_type: 'org_upload',
-      chunk_count: 6,
-      uploaded_at: '2026-06-01T11:15:00Z',
-    },
-  ]
-}
-
-/** Synthetic run id when POST /run is unavailable. */
-export function mockRunId(): string {
-  return `run_${Math.random().toString(36).slice(2, 10)}`
-}
-
-// ── Guided-question machine ──────────────────────────────────────────────────
-// Detects which context fields are still missing and asks one concrete question,
-// referencing parsed Excel numbers where possible.
-
-interface GuidedStep {
-  key: ContextFieldKey
-  ask: (preview: UploadPreview | null) => string
-}
-
-const GUIDED_STEPS: GuidedStep[] = [
-  {
-    key: 'budget',
-    ask: (preview) => {
-      const lead = previewLead(preview)
-      return `${lead}What's the total budget for this program, and over what period?`
-    },
-  },
-  {
-    key: 'staff',
-    ask: () =>
-      'How many field staff can you assign, and what roles do they cover?',
-  },
-  {
-    key: 'region',
-    ask: () =>
-      'Which region or area is this for? Note anything about local conditions (infrastructure, weather, terrain).',
-  },
-  {
-    key: 'crop',
-    ask: () => 'What crop or livelihood activity is the focus?',
-  },
-  {
-    key: 'beneficiaries',
-    ask: () => 'Roughly how many beneficiaries are you targeting?',
-  },
-]
-
-function previewLead(preview: UploadPreview | null): string {
-  if (!preview) return ''
-  const detected = detectFromHeaders(preview.headers)
-  const parts: string[] = []
-  if (detected.beneficiaries) parts.push(detected.beneficiaries)
-  if (detected.crop) parts.push(detected.crop)
-  if (parts.length === 0) {
-    return `I parsed ${preview.rows} rows across ${preview.cols} columns. `
-  }
-  return `I see ${parts.join(' and ')} in the data. `
-}
-
 /**
- * Returns the next guided question given what's already captured, or null when
- * every field has been covered.
+ * Heuristic: does pasted clipboard text look like spreadsheet cells? Copying a
+ * range from Excel / Google Sheets yields tab-delimited rows, so a tab plus at
+ * least two lines is a strong, safe signal (won't hijack ordinary chat text).
  */
-export function nextGuidedQuestion(
-  captured: Set<ContextFieldKey>,
-  preview: UploadPreview | null,
-): string | null {
-  const step = GUIDED_STEPS.find((s) => !captured.has(s.key))
-  return step ? step.ask(preview) : null
+export function looksLikeTable(text: string): boolean {
+  const t = text.trim()
+  if (!t.includes('\t')) return false
+  const lines = t.split(/\r?\n/).filter((l) => l.length > 0)
+  return lines.length >= 2 && lines[0].split('\t').length >= 2
 }
 
-// ── Field-detection heuristic (Excel headers + chat keywords) ────────────────
+/** Parse pasted spreadsheet cells (tab- or comma-delimited) into an UploadPreview. */
+export function parsePastedTable(text: string): UploadPreview {
+  const lines = text.trim().split(/\r?\n/).filter((l) => l.length > 0)
+  if (lines.length < 2) {
+    throw new Error('no table rows detected in pasted data')
+  }
 
-const FIELD_KEYWORDS: Record<ContextFieldKey, string[]> = {
-  region: ['region', 'province', 'district', 'barangay', 'village', 'municipal', 'area', 'location'],
-  crop: ['crop', 'rice', 'maize', 'corn', 'coffee', 'cacao', 'wheat', 'livestock', 'fishery', 'yield'],
-  beneficiaries: ['beneficiar', 'farmer', 'household', 'member', 'enrolled', 'population', 'count'],
-  budget: ['budget', 'cost', 'funding', 'php', '₱', 'usd', '$', 'peso', 'grant'],
-  staff: ['staff', 'officer', 'personnel', 'team', 'employee', 'extension worker'],
+  const delim = lines[0].includes('\t') ? '\t' : ','
+  const headers = lines[0].split(delim).map((h) => h.trim())
+  if (headers.length === 0) {
+    throw new Error('no columns detected in pasted data')
+  }
+
+  const dataRows = lines.slice(1).map((line) => {
+    const cells = line.split(delim)
+    const obj: Record<string, unknown> = {}
+    headers.forEach((h, i) => {
+      const raw = cells[i]?.trim() ?? ''
+      obj[h] = raw === '' ? null : coerceCell(raw)
+    })
+    return obj
+  })
+
+  return {
+    filename: 'pasted data',
+    rows: dataRows.length,
+    cols: headers.length,
+    headers,
+    sampleRows: dataRows.slice(0, SAMPLE_ROW_LIMIT),
+    excelData: dataRows.map((data) => ({ data })),
+  }
 }
 
-interface DetectedDetails {
-  region?: string
-  crop?: string
-  beneficiaries?: string
-  budget?: string
-  staff?: string
-}
-
-/** Light extraction of human-readable detail from parsed Excel headers. */
-function detectFromHeaders(headers: string[]): DetectedDetails {
-  const lower = headers.map((h) => h.toLowerCase())
-  const details: DetectedDetails = {}
-  if (lower.some((h) => FIELD_KEYWORDS.beneficiaries.some((k) => h.includes(k)))) {
-    details.beneficiaries = 'beneficiary data'
-  }
-  if (lower.some((h) => FIELD_KEYWORDS.crop.some((k) => h.includes(k)))) {
-    details.crop = 'crop/yield data'
-  }
-  return details
-}
-
-/**
- * Detect which context fields are present given the parsed Excel and the chat
- * transcript. Header matches and chat keyword matches both count.
- */
-export function detectContextFields(
-  preview: UploadPreview | null,
-  messages: ChatMessage[],
-): Record<ContextFieldKey, string | undefined> {
-  const result: Record<ContextFieldKey, string | undefined> = {
-    region: undefined,
-    crop: undefined,
-    beneficiaries: undefined,
-    budget: undefined,
-    staff: undefined,
-  }
-
-  const headerBlob = (preview?.headers ?? []).join(' ').toLowerCase()
-  const chatBlob = messages
-    .filter((m) => m.role === 'user')
-    .map((m) => m.content)
-    .join(' ')
-    .toLowerCase()
-
-  for (const key of Object.keys(FIELD_KEYWORDS) as ContextFieldKey[]) {
-    const keywords = FIELD_KEYWORDS[key]
-    const inHeaders = keywords.some((k) => headerBlob.includes(k))
-    const inChat = keywords.some((k) => chatBlob.includes(k))
-    if (inHeaders && inChat) result[key] = 'data + context'
-    else if (inHeaders) result[key] = 'from spreadsheet'
-    else if (inChat) result[key] = 'from chat'
-  }
-
-  return result
+/** Numbers (incl. thousands-separated) become numbers; everything else stays text. */
+function coerceCell(value: string): string | number {
+  const n = Number(value.replace(/,/g, ''))
+  return value !== '' && !Number.isNaN(n) ? n : value
 }

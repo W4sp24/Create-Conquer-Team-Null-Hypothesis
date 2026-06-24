@@ -90,6 +90,14 @@ export interface CompareResponse {
   profile_b: ProgramOutput
 }
 
+/** Response from POST /chat — the assistant's reply + captured-context state. */
+export interface ChatTurnResponse {
+  reply: string
+  captured_fields: string[]
+  ready: boolean
+  missing_required: string[]
+}
+
 // ── UI-only types ────────────────────────────────────────────────────────────
 
 /** Result of parsing an uploaded Excel file (real or mocked). */

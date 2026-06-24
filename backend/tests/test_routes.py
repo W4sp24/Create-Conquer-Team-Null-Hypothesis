@@ -138,51 +138,59 @@ def test_post_upload_no_file(client):
 # ── Test /chat endpoint ────────────────────────────────────────────────────────
 
 
-def test_post_chat_without_excel_data(client):
-    """Test POST /chat without Excel data prompts upload."""
-    response = client.post(
-        "/chat",
-        json={"message": "Hello", "excel_data": None}
-    )
-    
+def test_post_chat_returns_reply_and_state(client):
+    """POST /chat returns the assistant reply plus captured-context state."""
+    fake = {
+        "reply": "What crop is the focus?",
+        "captured_fields": ["region"],
+        "ready": False,
+    }
+    with patch("routes.input.run_chat_assistant", new=AsyncMock(return_value=fake)):
+        response = client.post(
+            "/chat",
+            json={"chat_messages": [{"role": "user", "content": "We farm in coastal Cebu"}]},
+        )
+
     assert response.status_code == 200
     data = response.json()
-    assert "question" in data
-    assert "upload" in data["question"].lower()
+    assert data["reply"] == "What crop is the focus?"
+    assert data["captured_fields"] == ["region"]
+    assert data["ready"] is False
+    # region captured → crop + beneficiaries still required
+    assert set(data["missing_required"]) == {"crop", "beneficiaries"}
 
 
-def test_post_chat_with_excel_data(client):
-    """Test POST /chat with Excel data returns guided question."""
-    excel_data = [
-        {"data": {"beneficiary_count": 5000, "crop_type": "rice"}}
-    ]
-    
-    response = client.post(
-        "/chat",
-        json={"message": "We have 5000 farmers", "excel_data": excel_data}
-    )
-    
+def test_post_chat_ready_when_required_captured(client):
+    """When all required fields are captured, ready is true and nothing is missing."""
+    fake = {
+        "reply": "I have the essentials — generate when ready.",
+        "captured_fields": ["region", "crop", "beneficiaries"],
+        "ready": True,
+    }
+    with patch("routes.input.run_chat_assistant", new=AsyncMock(return_value=fake)):
+        response = client.post(
+            "/chat",
+            json={
+                "chat_messages": [{"role": "user", "content": "Cebu rice, 5000 farmers"}],
+                "excel_preview": {
+                    "filename": "f.xlsx",
+                    "rows": 5000,
+                    "cols": 3,
+                    "headers": ["farmer", "crop"],
+                },
+            },
+        )
+
     assert response.status_code == 200
     data = response.json()
-    assert "question" in data
-    assert "role" in data
-    assert data["role"] == "assistant"
+    assert data["ready"] is True
+    assert data["missing_required"] == []
 
 
-def test_post_chat_budget_question(client):
-    """Test POST /chat asks about budget when not mentioned."""
-    excel_data = [
-        {"data": {"beneficiary_count": 5000}}
-    ]
-    
-    response = client.post(
-        "/chat",
-        json={"message": "We have farmers", "excel_data": excel_data}
-    )
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert "budget" in data["question"].lower() or "cost" in data["question"].lower()
+def test_post_chat_requires_chat_messages(client):
+    """The new contract requires chat_messages; the old {message} shape is rejected."""
+    response = client.post("/chat", json={"message": "hi"})
+    assert response.status_code == 422
 
 
 # ── Test /sources endpoints ────────────────────────────────────────────────────
@@ -219,10 +227,21 @@ def test_post_sources_upload_invalid_file_type(client):
 def test_get_sources_returns_list(client):
     """Test GET /sources returns list of sources."""
     response = client.get("/sources")
-    
+
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+
+
+def test_get_specialized_sources_returns_list(client):
+    """GET /sources/specialized returns the curated KB metadata (empty until ingested)."""
+    response = client.get("/sources/specialized")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    for item in data:
+        assert item["source_type"] == "specialized"
 
 
 def test_delete_sources_invalid_filename(client):
@@ -342,11 +361,17 @@ def test_full_workflow_upload_chat_run(client):
     assert upload_response.status_code == 200
     excel_data = upload_response.json()["rows"]
     
-    # Step 2: Chat
-    chat_response = client.post(
-        "/chat",
-        json={"message": "Our budget is $50,000", "excel_data": excel_data}
-    )
+    # Step 2: Chat (LLM assistant mocked)
+    fake = {
+        "reply": "Got it — budget noted.",
+        "captured_fields": ["region", "crop", "beneficiaries", "budget"],
+        "ready": True,
+    }
+    with patch("routes.input.run_chat_assistant", new=AsyncMock(return_value=fake)):
+        chat_response = client.post(
+            "/chat",
+            json={"chat_messages": [{"role": "user", "content": "Our budget is $50,000"}]},
+        )
     assert chat_response.status_code == 200
     
     # Step 3: Run pipeline

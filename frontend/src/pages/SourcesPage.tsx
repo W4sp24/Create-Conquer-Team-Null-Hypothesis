@@ -43,14 +43,14 @@ export default function SourcesPage() {
 
       <main className="relative z-10 mx-auto w-full max-w-[1100px] flex-1 px-4 py-10 sm:px-6">
         <div className="mb-6 animate-rise">
-          <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-forest">
-            <FolderOpen size={12} className="text-leaf" />
+          <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-leaf-bright">
+            <FolderOpen size={12} className="text-gold" />
             Sources
           </div>
-          <h1 className="font-display text-[32px] font-semibold leading-tight tracking-headline text-primary">
+          <h1 className="font-display text-[32px] font-semibold leading-tight tracking-headline text-mist">
             Knowledge base
           </h1>
-          <p className="mt-2 text-body text-secondary">
+          <p className="mt-2 text-body text-mist-muted">
             The Evidence Retriever queries both the curated global base and your organization's
             uploads.
           </p>

@@ -12,7 +12,13 @@
   --forest-deep: #1a3320;
   --leaf: #4fae53;
   --leaf-soft: #eaf1e7;
-  
+  /* Text on the dark forest page background (outside white cards) */
+  --text-light: #eceae0;
+  --text-light-muted: #aebfae;
+  /* Secondary accent colors to enrich the palette */
+  --gold: #e0a458;
+  --sky: #5ba6b8;
+
   /* Animation timing */
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -28,7 +34,9 @@
 
   body {
     background-color: var(--forest-deep);
-    color: var(--primary);
+    /* Light by default — the page background is dark forest green. White cards
+       reset this back to dark via .card-surface below. */
+    color: var(--text-light);
     font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
     font-size: 15px;
     line-height: 1.55;
@@ -99,6 +107,8 @@
   /* White rounded surface with a soft shadow - Enhanced with hover */
   .card-surface {
     @apply rounded-card border border-hairline bg-panel shadow-card;
+    /* Reset to dark text inside white cards (body defaults to light). */
+    color: var(--primary);
     transition: all 0.4s var(--ease-smooth);
     will-change: transform, box-shadow;
   }

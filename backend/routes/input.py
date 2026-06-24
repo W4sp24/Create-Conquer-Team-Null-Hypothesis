@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from models import ExcelRow, ChatMessage
 from parsers.excel_parser import parse_excel
+from agents.chat_assistant import run_chat_assistant, REQUIRED_FIELDS
 
 router = APIRouter()
 
@@ -18,16 +19,26 @@ class UploadResponse(BaseModel):
     row_count: int
 
 
+class ExcelPreview(BaseModel):
+    """Compact summary of a parsed spreadsheet, sent alongside chat turns."""
+    filename: str
+    rows: int
+    cols: int
+    headers: list[str] = []
+
+
 class ChatRequest(BaseModel):
-    """Request body for chat endpoint."""
-    message: str
-    excel_data: list[ExcelRow] | None = None
+    """Request body for chat endpoint — full transcript + optional Excel summary."""
+    chat_messages: list[ChatMessage]
+    excel_preview: ExcelPreview | None = None
 
 
 class ChatResponse(BaseModel):
-    """Response from chat endpoint with next guided question."""
-    question: str
-    role: str = "assistant"
+    """Conversational reply plus captured-context state for the UI."""
+    reply: str
+    captured_fields: list[str]
+    ready: bool
+    missing_required: list[str]
 
 
 @router.post("/upload")
@@ -65,54 +76,24 @@ async def upload_excel(file: UploadFile = File(...)) -> UploadResponse:
 @router.post("/chat")
 async def process_chat(request: ChatRequest) -> ChatResponse:
     """
-    Process chat message → return next guided question
-    
-    Purpose: Process chat message → return next guided question
-    
-    After Excel upload, the system reads the data and asks smart data-aware
-    guided questions. User can type freely at any point. Captures budget,
-    staff, constraints, local context.
-    """
-    # This is a guided chat system that asks contextual questions
-    # based on the uploaded Excel data
-    
-    # For MVP, we'll implement a simple question flow
-    # In production, this would use an LLM to generate smart questions
-    
-    message_lower = request.message.lower()
-    
-    # Check if user has uploaded data
-    if not request.excel_data:
-        return ChatResponse(
-            question="Please upload your Excel file first to begin the assessment."
-        )
-    
-    # Analyze what information we might be missing
-    # This is a simplified version - production would use LLM
-    
-    if "budget" not in message_lower and "cost" not in message_lower:
-        return ChatResponse(
-            question=f"I can see {len(request.excel_data)} beneficiaries in your data. What is your available budget for this program?"
-        )
-    
-    if "staff" not in message_lower and "team" not in message_lower:
-        return ChatResponse(
-            question="How many staff members do you have available for program implementation?"
-        )
-    
-    if "constraint" not in message_lower and "challenge" not in message_lower:
-        return ChatResponse(
-            question="Are there any specific constraints or challenges in your region that we should consider (e.g., seasonal factors, infrastructure limitations)?"
-        )
-    
-    if "timeline" not in message_lower and "duration" not in message_lower:
-        return ChatResponse(
-            question="What is your preferred timeline for program implementation?"
-        )
-    
-    # If we've covered the basics, acknowledge and prepare for pipeline
-    return ChatResponse(
-        question="Thank you for providing that information. I have everything I need to generate a customized program. Click 'Run' when you're ready to proceed."
-    )
+    Process a chat turn → real LLM reply + captured-context state.
 
-# Made with Bob
+    The LLM intake assistant answers the user conversationally, decides which
+    context fields are captured from the transcript + parsed spreadsheet, and
+    signals `ready` once all required fields are present so the UI can offer to
+    generate the program.
+    """
+    excel_preview = (
+        request.excel_preview.model_dump() if request.excel_preview else None
+    )
+    result = await run_chat_assistant(request.chat_messages, excel_preview)
+
+    captured = result["captured_fields"]
+    missing_required = [f for f in REQUIRED_FIELDS if f not in captured]
+
+    return ChatResponse(
+        reply=result["reply"],
+        captured_fields=captured,
+        ready=result["ready"],
+        missing_required=missing_required,
+    )

@@ -10,7 +10,7 @@ import os
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from models import SourceMetadata
-from rag.chroma_client import org_collection
+from rag.chroma_client import org_collection, specialized_collection
 from rag.ingestor import ingest_file, delete_source, list_sources
 
 router = APIRouter()
@@ -58,6 +58,25 @@ async def get_sources() -> list[SourceMetadata]:
         SourceMetadata(
             filename=s["source_name"],
             source_type="org_upload",
+            chunk_count=s["chunk_count"],
+            uploaded_at=s["uploaded_at"],
+        )
+        for s in sources
+    ]
+
+
+@router.get("/sources/specialized")
+async def get_specialized_sources() -> list[SourceMetadata]:
+    """List the curated global evidence base (read-only specialized KB).
+
+    Returns the real specialized collection metadata — an empty list until
+    `scripts/ingest_specialized.py` has been run.
+    """
+    sources = await asyncio.to_thread(list_sources, specialized_collection)
+    return [
+        SourceMetadata(
+            filename=s["source_name"],
+            source_type="specialized",
             chunk_count=s["chunk_count"],
             uploaded_at=s["uploaded_at"],
         )
