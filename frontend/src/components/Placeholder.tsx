@@ -10,20 +10,20 @@ interface PlaceholderProps {
 
 export default function Placeholder({ label, title, body }: PlaceholderProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
-      <header className="border-b border-hairline/70">
-        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-3.5 sm:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-forest text-white">
-              <Sprout size={17} strokeWidth={1.7} />
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-forest-deep/95 backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-5 sm:px-6">
+          <Link to="/" className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-white">
+              <Sprout size={18} strokeWidth={1.7} />
             </span>
-            <span className="font-display text-[19px] font-semibold tracking-headline text-primary">
-              AIS
+            <span className="font-display text-[21px] font-semibold tracking-headline text-white">
+              AniKonsulta
             </span>
           </Link>
           <Link
             to="/"
-            className="pill border border-hairline bg-panel px-4 py-2 text-[13px] font-medium text-primary hover:border-forest hover:text-forest"
+            className="pill border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white hover:border-leaf hover:bg-white/20"
           >
             <ArrowLeft size={15} strokeWidth={1.7} />
             Input

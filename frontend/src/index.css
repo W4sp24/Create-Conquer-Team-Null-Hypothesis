@@ -22,19 +22,33 @@
   }
 
   body {
-    background-color: var(--canvas);
+    background-color: var(--forest-deep);
     color: var(--primary);
     font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
     font-size: 15px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    /* Faint warm grain so the canvas reads as paper, not flat fill */
+    /* Subtle texture for depth on dark background */
     background-image: radial-gradient(
-      rgba(26, 51, 32, 0.022) 1px,
+      rgba(79, 174, 83, 0.03) 1px,
       transparent 1px
     );
     background-size: 4px 4px;
+    position: relative;
+  }
+  
+  /* Decorative glow effect from Hero section */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(79, 174, 83, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
   }
 
   * {

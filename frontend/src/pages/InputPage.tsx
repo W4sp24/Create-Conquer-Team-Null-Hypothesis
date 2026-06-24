@@ -129,12 +129,10 @@ export default function InputPage() {
   )
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <div className="flex min-h-screen flex-col">
       <TopNav />
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-10 sm:px-6">
-        <Hero capturedCount={capturedCount} total={FIELD_CONFIG.length} />
-
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-10 sm:px-6">
         {/* Desktop: 3-column workspace of rich cards */}
         <div className="hidden gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px]">
           <PanelCard
@@ -195,36 +193,36 @@ export default function InputPage() {
 
 function TopNav() {
   return (
-    <header className="sticky top-0 z-20 border-b border-hairline/70 bg-canvas/80 backdrop-blur-sm">
-      <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-3.5 sm:px-6">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-forest text-white">
-            <Sprout size={17} strokeWidth={1.7} />
+    <header className="sticky top-0 z-20 border-b border-white/10 bg-forest-deep/95 backdrop-blur-sm">
+      <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-5 sm:px-6">
+        <Link to="/" className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-white">
+            <Sprout size={18} strokeWidth={1.7} />
           </span>
-          <span className="font-display text-[19px] font-semibold tracking-headline text-primary">
-            AIS
+          <span className="font-display text-[21px] font-semibold tracking-headline text-white">
+            AniKonsulta
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-1 rounded-full border border-hairline bg-panel/70 px-1.5 py-1.5 text-[13px] sm:flex">
-          <span className="rounded-full bg-forest px-3.5 py-1.5 font-medium text-white">
+        <nav className="hidden items-center gap-1 rounded-full border border-white/20 bg-white/10 px-1.5 py-1.5 text-[13px] sm:flex">
+          <span className="rounded-full bg-leaf px-3.5 py-1.5 font-medium text-white">
             Input
           </span>
           <Link
             to="/status"
-            className="rounded-full px-3.5 py-1.5 text-secondary transition-colors hover:text-primary"
+            className="rounded-full px-3.5 py-1.5 text-white/70 transition-colors hover:text-white"
           >
             Agents
           </Link>
           <Link
             to="/output"
-            className="rounded-full px-3.5 py-1.5 text-secondary transition-colors hover:text-primary"
+            className="rounded-full px-3.5 py-1.5 text-white/70 transition-colors hover:text-white"
           >
             Output
           </Link>
           <Link
             to="/sources"
-            className="rounded-full px-3.5 py-1.5 text-secondary transition-colors hover:text-primary"
+            className="rounded-full px-3.5 py-1.5 text-white/70 transition-colors hover:text-white"
           >
             Sources
           </Link>
@@ -232,63 +230,12 @@ function TopNav() {
 
         <Link
           to="/sources"
-          className="pill border border-hairline bg-panel px-4 py-2 text-[13px] font-medium text-primary hover:border-forest hover:text-forest"
+          className="pill border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white hover:border-leaf hover:bg-white/20"
         >
           Manage sources
         </Link>
       </div>
     </header>
-  )
-}
-
-// ── Hero feature band (deep green) ───────────────────────────────────────────
-
-function Hero({ capturedCount, total }: { capturedCount: number; total: number }) {
-  return (
-    <section className="animate-rise delay-1 relative my-6 overflow-hidden rounded-card bg-forest-deep px-7 py-8 text-white shadow-feature sm:px-10 sm:py-10">
-      {/* decorative sparks */}
-      <Spark size={18} className="absolute right-10 top-8 text-leaf/70" />
-      <Spark size={11} className="absolute right-24 top-16 text-leaf/40" />
-      <Spark size={13} className="absolute bottom-8 right-16 text-white/20" />
-      {/* soft vegetal glow, kept subtle */}
-      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-leaf/15 blur-3xl" />
-
-      <div className="relative max-w-2xl">
-        <span className="pill mb-5 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-label text-leaf-soft">
-          <Spark size={11} className="text-leaf" />
-          Adaptive Intervention Synthesizer
-        </span>
-        <h1 className="font-display text-[34px] font-semibold leading-[1.08] tracking-headline sm:text-[44px]">
-          Turn field data into a program{' '}
-          <span className="text-leaf-bright">built for your context.</span>
-        </h1>
-        <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/70">
-          Same need, different context, different solution. Drop your spreadsheet,
-          add a few words of context, and the agents draft an implementation-ready
-          intervention.
-        </p>
-      </div>
-
-      {/* progress chip */}
-      <div className="relative mt-7 inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[13px]">
-        <span className="text-white/60">Context captured</span>
-        <span className="flex items-center gap-1.5">
-          {Array.from({ length: total }).map((_, i) => (
-            <span
-              key={i}
-              className={
-                i < capturedCount
-                  ? 'h-1.5 w-6 rounded-full bg-leaf-bright transition-colors'
-                  : 'h-1.5 w-6 rounded-full bg-white/15 transition-colors'
-              }
-            />
-          ))}
-        </span>
-        <span className="font-medium text-white">
-          {capturedCount}/{total}
-        </span>
-      </div>
-    </section>
   )
 }
 
