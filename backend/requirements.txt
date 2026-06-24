@@ -8,3 +8,4 @@ sentence-transformers
 groq
 google-generativeai
 python-dotenv
+pytest
