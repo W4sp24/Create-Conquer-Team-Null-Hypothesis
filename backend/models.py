@@ -35,13 +35,13 @@ class RetrievedDocs(BaseModel):
 # ── Analysis agent outputs ─────────────────────────────────────────────────────
 
 class DataAnalystOutput(BaseModel):
-    beneficiary_count: int | None
-    crop_type: str | None
-    region: str | None
-    baseline_yield_t_ha: float | None
-    income_drop_pct: float | None
-    staff_count: int | None
-    raw_metrics: dict  # any additional extracted numbers
+    beneficiary_count: int | None = None
+    crop_type: str | None = None
+    region: str | None = None
+    baseline_yield_t_ha: float | None = None
+    income_drop_pct: float | None = None
+    staff_count: int | None = None
+    raw_metrics: dict = {}
 
 
 class InterventionAdapterOutput(BaseModel):
@@ -81,10 +81,33 @@ class ProgramOutput(BaseModel):
     intervention: InterventionAdapterOutput
     rollout_phases: list[RolloutPhase]
     staff_roles: list[str]
-    per_beneficiary_cost_usd: float | None
-    total_budget_estimate: str | None
+    per_beneficiary_cost_usd: float | None = None
+    total_budget_estimate: str | None = None
     kpis: list[KPI]
     risk_assessment: RiskMneOutput
-    adaptations_made: list[str]   # visible to user — how the program was reshaped
+    adaptations_made: list[str]   # visible to user — how program was reshaped
     citations: list[str]          # "[Global: FAO 2023]" | "[Org: cebu_baseline.pdf]"
     confidence_level: float       # 0.0–1.0
+
+
+# ── SSE / real-time ───────────────────────────────────────────────────────────
+
+class SSEEvent(BaseModel):
+    agent: str
+    status: str  # "pending" | "running" | "done" | "error"
+
+
+# ── Sources screen ────────────────────────────────────────────────────────────
+
+class SourceMetadata(BaseModel):
+    filename: str
+    source_type: str   # "specialized" | "org_upload"
+    chunk_count: int
+    uploaded_at: str   # ISO 8601
+
+
+# ── Compare endpoint ──────────────────────────────────────────────────────────
+
+class CompareRequest(BaseModel):
+    profile_a: ContextPayload
+    profile_b: ContextPayload
