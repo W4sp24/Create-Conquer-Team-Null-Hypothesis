@@ -189,14 +189,15 @@ def test_post_chat_budget_question(client):
 
 
 def test_post_sources_upload_valid_pdf(client):
-    """Test POST /sources/upload with valid PDF file."""
-    pdf_content = b"%PDF-1.4 fake pdf content"
-    
-    response = client.post(
-        "/sources/upload",
-        files={"file": ("test.pdf", pdf_content, "application/pdf")}
-    )
-    
+    """Test POST /sources/upload with valid PDF file (ingestor mocked)."""
+    with patch("routes.sources.ingest_file", return_value=3):
+        pdf_content = b"%PDF-1.4 fake pdf content"
+
+        response = client.post(
+            "/sources/upload",
+            files={"file": ("test.pdf", pdf_content, "application/pdf")}
+        )
+
     assert response.status_code == 200
     data = response.json()
     assert "filename" in data

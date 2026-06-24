@@ -13,4 +13,4 @@ groq
 google-generativeai
 python-dotenv
 pytest
-httpx
+httpx2
