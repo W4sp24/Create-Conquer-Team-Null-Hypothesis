@@ -25,6 +25,8 @@ class ExcelPreview(BaseModel):
     rows: int
     cols: int
     headers: list[str] = []
+    sample_rows: list[dict] = []   # first few rows: {column: value}
+    columns: list[dict] = []       # per-column stats from summarizeColumns()
 
 
 class ChatRequest(BaseModel):

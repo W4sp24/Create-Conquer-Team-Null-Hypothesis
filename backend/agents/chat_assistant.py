@@ -18,7 +18,12 @@ while being genuinely helpful. You can:
 - Answer the user's questions directly and intelligently.
 - Help the user reason through a field they are unsure about (e.g. suggest how to \
 estimate a budget from beneficiary count, or how to describe their region).
-- Reference the parsed spreadsheet data when it is provided.
+- Read and reason about the uploaded spreadsheet. When a spreadsheet is provided you \
+are given per-column statistics (count, and for numeric columns min/mean/max/sum) plus \
+a few sample rows. Use these to answer questions about the data directly — e.g. report \
+the average of a numeric column from its "mean", or a range from min/max. Do not invent \
+numbers beyond what the statistics and samples show; if a question needs detail the \
+summary doesn't contain, say so.
 
 You track these context fields:
 - region        (REQUIRED) — area and local conditions (infrastructure, weather, terrain)
@@ -48,15 +53,46 @@ Return ONLY valid JSON, no prose outside it:
 
 
 def _excel_summary(excel_preview: dict | None) -> str:
-    """One-line-ish summary of the parsed spreadsheet for the prompt."""
+    """Render a compact, data-aware spreadsheet summary for the prompt.
+
+    Includes per-column statistics (numeric min/mean/max/sum, or example text
+    values) and a few sample rows so the assistant can actually read the data.
+    """
     if not excel_preview:
         return "No spreadsheet uploaded."
+
     filename = excel_preview.get("filename", "spreadsheet")
     rows = excel_preview.get("rows", "?")
     cols = excel_preview.get("cols", "?")
-    headers = excel_preview.get("headers", []) or []
-    headers_str = ", ".join(str(h) for h in headers) if headers else "none detected"
-    return f"File '{filename}': {rows} rows x {cols} columns. Columns: {headers_str}."
+    columns = excel_preview.get("columns") or []
+    sample_rows = excel_preview.get("sample_rows") or []
+
+    lines = [f"File '{filename}': {rows} rows x {cols} columns."]
+
+    if columns:
+        lines.append("Columns:")
+        for c in columns:
+            name = c.get("name", "?")
+            if c.get("kind") == "number":
+                lines.append(
+                    f"- {name} (number: mean {c.get('mean')}, min {c.get('min')}, "
+                    f"max {c.get('max')}, sum {c.get('sum')}, n={c.get('count')})"
+                )
+            else:
+                examples = ", ".join(str(e) for e in (c.get("examples") or [])[:5])
+                detail = f", e.g. {examples}" if examples else ""
+                lines.append(f"- {name} (text, {c.get('count')} values{detail})")
+    else:
+        headers = excel_preview.get("headers", []) or []
+        headers_str = ", ".join(str(h) for h in headers) if headers else "none detected"
+        lines.append(f"Columns: {headers_str}")
+
+    if sample_rows:
+        lines.append("Sample rows:")
+        for r in sample_rows[:5]:
+            lines.append(f"  {r}")
+
+    return "\n".join(lines)
 
 
 async def run_chat_assistant(

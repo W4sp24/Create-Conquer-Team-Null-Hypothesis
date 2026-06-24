@@ -11,7 +11,7 @@ import type {
   SourceMetadata,
   UploadPreview,
 } from '../types'
-import { parseExcelClient } from './mock'
+import { parseExcelClient, summarizeColumns } from './mock'
 
 /** Whether a fetch succeeded with a JSON body. Network errors / 404s → false. */
 async function tryJson<T>(input: RequestInfo, init?: RequestInit): Promise<T | null> {
@@ -53,6 +53,8 @@ export async function sendChat(
         rows: preview.rows,
         cols: preview.cols,
         headers: preview.headers,
+        sample_rows: preview.sampleRows.slice(0, 5),
+        columns: summarizeColumns(preview.excelData, preview.headers),
       }
     : null
 
