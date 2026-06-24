@@ -28,9 +28,10 @@ async def health():
     return {"status": "ok"}
 
 
-# Routers added here when feat/api-endpoints merges:
-# from routes import run, input, sources, compare
-# app.include_router(run.router)
-# app.include_router(input.router)
-# app.include_router(sources.router)
-# app.include_router(compare.router)
+# Routers for API endpoints
+from routes import run, input, sources, compare
+
+app.include_router(run.router)
+app.include_router(input.router)
+app.include_router(sources.router)
+app.include_router(compare.router)
