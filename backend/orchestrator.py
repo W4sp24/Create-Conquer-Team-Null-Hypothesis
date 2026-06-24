@@ -132,13 +132,33 @@ async def _run_synthesizer_stub(
 ) -> ProgramOutput:
     await _push_sse(sse_queue, "synthesizer", "running")
     await asyncio.sleep(0)
+
+    crop = analyst.crop_type or "crop"
+    region = analyst.region or "target area"
+    title = f"{adapter.intervention_name} — {region.title()} {crop.title()} Program"
+
+    count_str = f"{analyst.beneficiary_count:,}" if analyst.beneficiary_count else "Enrolled"
+    target_beneficiaries = f"{count_str} smallholder {crop} farmers in {region} areas"
+
+    staff_count = analyst.staff_count or 6
+    field_officers = max(1, staff_count - 2)
+    staff_roles = [
+        f"Field officer (×{field_officers})",
+        "M&E coordinator (×1)",
+        "Program manager (×1)",
+    ]
+
+    citations = (
+        [f"[Global: {doc.source}]" for doc in retrieved.specialized]
+        + [f"[Org: {doc.source}]" for doc in retrieved.org_uploads]
+    )
+    if not citations:
+        citations = ["[No sources retrieved — upload docs via POST /sources/upload]"]
+
     result = ProgramOutput(
         run_id=run_id,
-        title="Coastal Rice Rehabilitation Program — Cebu",
-        target_beneficiaries=(
-            f"{analyst.beneficiary_count:,} smallholder rice farmers "
-            "in Cebu coastal barangays"
-        ),
+        title=title,
+        target_beneficiaries=target_beneficiaries,
         intervention=adapter,
         rollout_phases=[
             RolloutPhase(
@@ -158,20 +178,13 @@ async def _run_synthesizer_stub(
                 ],
             ),
         ],
-        staff_roles=[
-            "Field officer (×4)",
-            "M&E coordinator (×1)",
-            "Program manager (×1)",
-        ],
+        staff_roles=staff_roles,
         per_beneficiary_cost_usd=None,
-        total_budget_estimate="₱2,000,000",
+        total_budget_estimate=None,
         kpis=risk.kpis,
         risk_assessment=risk,
         adaptations_made=adapter.adaptations,
-        citations=[
-            "[Global: FAO SRI Guide 2023]",
-            "[Global: IRRI Coastal Rice 2021]",
-        ],
+        citations=citations,
         confidence_level=risk.confidence_score,
     )
     await _push_sse(sse_queue, "synthesizer", "done")

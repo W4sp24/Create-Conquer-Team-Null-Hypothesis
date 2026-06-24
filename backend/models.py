@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ── Input layer ────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ class DataAnalystOutput(BaseModel):
     baseline_yield_t_ha: float | None = None
     income_drop_pct: float | None = None
     staff_count: int | None = None
-    raw_metrics: dict = {}
+    raw_metrics: dict = Field(default_factory=dict)
 
 
 class InterventionAdapterOutput(BaseModel):

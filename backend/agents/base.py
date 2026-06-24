@@ -57,7 +57,7 @@ def _call_gemini(model: str, system_prompt: str, user_prompt: str) -> str:
     return m.generate_content(full_prompt).text
 
 
-def extract_json(text: str) -> dict:
+def extract_json(text: str) -> dict | list:
     """Strip markdown fences if present, then parse JSON. Used by all agents."""
     match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
     raw = match.group(1) if match else text.strip()
