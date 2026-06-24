@@ -15,6 +15,7 @@ import OrgSourceList from '../components/OrgSourceList'
 import ChatBox from '../components/ChatBox'
 import ContextStatus from '../components/ContextStatus'
 import Spark from '../components/Spark'
+import FloatingParticles from '../components/FloatingParticles'
 
 const INITIAL_MESSAGE: ChatMessage = {
   role: 'system',
@@ -130,9 +131,10 @@ export default function InputPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      <FloatingParticles />
       <TopNav />
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-10 sm:px-6">
+      <main className="relative z-10 mx-auto w-full max-w-[1400px] flex-1 px-4 py-10 sm:px-6">
         {/* Desktop: 3-column workspace of rich cards */}
         <div className="hidden gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px]">
           <PanelCard
@@ -193,10 +195,10 @@ export default function InputPage() {
 
 function TopNav() {
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-forest-deep/95 backdrop-blur-sm">
+    <header className="glass sticky top-0 z-20 border-b border-white/10 bg-forest-deep/95 backdrop-blur-sm">
       <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-5 sm:px-6">
-        <Link to="/" className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-white">
+        <Link to="/" className="group flex items-center gap-2.5 transition-transform hover:scale-105">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-white shadow-glow transition-all duration-300 group-hover:shadow-glow-lg group-hover:rotate-12">
             <Sprout size={18} strokeWidth={1.7} />
           </span>
           <span className="font-display text-[21px] font-semibold tracking-headline text-white">
@@ -204,25 +206,25 @@ function TopNav() {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-1 rounded-full border border-white/20 bg-white/10 px-1.5 py-1.5 text-[13px] sm:flex">
-          <span className="rounded-full bg-leaf px-3.5 py-1.5 font-medium text-white">
+        <nav className="glass hidden items-center gap-1 rounded-full border border-white/20 bg-white/10 px-1.5 py-1.5 text-[13px] sm:flex">
+          <span className="rounded-full bg-leaf px-3.5 py-1.5 font-medium text-white shadow-glow transition-all duration-300">
             Input
           </span>
           <Link
             to="/status"
-            className="rounded-full px-3.5 py-1.5 text-white/70 transition-colors hover:text-white"
+            className="rounded-full px-3.5 py-1.5 text-white/70 transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105"
           >
             Agents
           </Link>
           <Link
             to="/output"
-            className="rounded-full px-3.5 py-1.5 text-white/70 transition-colors hover:text-white"
+            className="rounded-full px-3.5 py-1.5 text-white/70 transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105"
           >
             Output
           </Link>
           <Link
             to="/sources"
-            className="rounded-full px-3.5 py-1.5 text-white/70 transition-colors hover:text-white"
+            className="rounded-full px-3.5 py-1.5 text-white/70 transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105"
           >
             Sources
           </Link>
@@ -230,7 +232,7 @@ function TopNav() {
 
         <Link
           to="/sources"
-          className="pill border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white hover:border-leaf hover:bg-white/20"
+          className="pill border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white transition-all duration-300 hover:border-leaf hover:bg-white/20 hover:scale-105 hover:shadow-glow"
         >
           Manage sources
         </Link>
@@ -255,14 +257,15 @@ function PanelCard({
   bodyClassName?: string
 }) {
   return (
-    <section className={`card-surface flex flex-col overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2.5 border-b border-hairline px-5 py-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-leaf-soft text-forest">
+    <section className={`card-surface group flex flex-col overflow-hidden transition-all duration-500 hover:shadow-card-hover ${className}`}>
+      <div className="flex items-center gap-2.5 border-b border-hairline bg-gradient-to-r from-leaf-soft/50 to-transparent px-5 py-4 transition-all duration-300 group-hover:from-leaf-soft">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-leaf-soft text-forest transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 group-hover:shadow-glow">
           {icon}
         </span>
-        <span className="text-label font-semibold uppercase tracking-label text-forest">
+        <span className="text-label font-semibold uppercase tracking-label text-forest transition-colors duration-300 group-hover:text-forest-deep">
           {label}
         </span>
+        <Spark size={10} className="ml-auto text-leaf opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:animate-sparkle" />
       </div>
       <div className={`flex flex-col p-5 ${bodyClassName}`}>{children}</div>
     </section>

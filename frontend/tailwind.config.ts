@@ -42,6 +42,8 @@ export default {
         'card-hover':
           '0 2px 4px rgba(26,51,32,0.06), 0 22px 44px -20px rgba(26,51,32,0.30)',
         feature: '0 24px 60px -24px rgba(19,36,26,0.55)',
+        glow: '0 0 20px rgba(79, 174, 83, 0.3)',
+        'glow-lg': '0 0 40px rgba(79, 174, 83, 0.4)',
       },
       fontSize: {
         label: ['11px', { lineHeight: '1', letterSpacing: '0.14em' }],
@@ -56,10 +58,52 @@ export default {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        'slide-in-up': {
+          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'slide-in-right': {
+          '0%': { opacity: '0', transform: 'translateX(-20px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        'bounce-in': {
+          '0%': { opacity: '0', transform: 'scale(0.3)' },
+          '50%': { opacity: '1', transform: 'scale(1.05)' },
+          '70%': { transform: 'scale(0.9)' },
+          '100%': { transform: 'scale(1)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        'pulse-glow': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(79, 174, 83, 0.4)' },
+          '50%': { boxShadow: '0 0 0 8px rgba(79, 174, 83, 0)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        sparkle: {
+          '0%, 100%': { opacity: '0', transform: 'scale(0) rotate(0deg)' },
+          '50%': { opacity: '1', transform: 'scale(1) rotate(180deg)' },
+        },
       },
       animation: {
         rise: 'rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
         'fade-in': 'fade-in 0.5s ease-out both',
+        'slide-in-up': 'slide-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'slide-in-right': 'slide-in-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'bounce-in': 'bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) both',
+        shimmer: 'shimmer 2s ease-in-out infinite',
+        'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+        float: 'float 3s ease-in-out infinite',
+        sparkle: 'sparkle 1.5s ease-in-out infinite',
+      },
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+        spring: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       },
     },
   },
