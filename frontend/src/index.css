@@ -1,0 +1,330 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --canvas: #f7f5ee;
+  --panel: #ffffff;
+  --hairline: #e7e3d7;
+  --primary: #1a1a16;
+  --secondary: #6b6b5f;
+  --forest: #2f5233;
+  --forest-deep: #1a3320;
+  --leaf: #4fae53;
+  --leaf-soft: #eaf1e7;
+  
+  /* Animation timing */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--forest-deep);
+    color: var(--primary);
+    font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Subtle texture for depth on dark background */
+    background-image: radial-gradient(
+      rgba(79, 174, 83, 0.03) 1px,
+      transparent 1px
+    );
+    background-size: 4px 4px;
+    position: relative;
+    overflow-x: hidden;
+  }
+  
+  /* Decorative glow effect from Hero section - Enhanced with animation */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(79, 174, 83, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    animation: float-glow 20s ease-in-out infinite;
+  }
+  
+  /* Secondary ambient glow */
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -150px;
+    left: -150px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(79, 174, 83, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    animation: float-glow 25s ease-in-out infinite reverse;
+  }
+
+  * {
+    border-color: var(--hairline);
+  }
+
+  ::selection {
+    background: var(--leaf-soft);
+    color: var(--forest-deep);
+  }
+}
+
+@layer components {
+  /* Tracked section labels with a small leaf tick — SOURCES / CHAT / etc. */
+  .section-label {
+    @apply inline-flex items-center gap-2 text-label font-semibold uppercase text-forest;
+  }
+  .section-label::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--leaf);
+    display: inline-block;
+  }
+
+  /* White rounded surface with a soft shadow - Enhanced with hover */
+  .card-surface {
+    @apply rounded-card border border-hairline bg-panel shadow-card;
+    transition: all 0.4s var(--ease-smooth);
+    will-change: transform, box-shadow;
+  }
+  
+  .card-surface:hover {
+    @apply shadow-card-hover;
+    transform: translateY(-2px);
+  }
+
+  /* Pill - Enhanced transitions */
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-full transition-all duration-200;
+    will-change: transform;
+  }
+  
+  /* Glassmorphism effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Shimmer loading effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(79, 174, 83, 0.1) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite;
+  }
+  
+  /* Glow effect for interactive elements */
+  .glow-on-hover {
+    position: relative;
+    transition: all 0.3s var(--ease-smooth);
+  }
+  
+  .glow-on-hover::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(45deg, var(--leaf), var(--forest));
+    opacity: 0;
+    transition: opacity 0.3s var(--ease-smooth);
+    z-index: -1;
+    filter: blur(8px);
+  }
+  
+  .glow-on-hover:hover::before {
+    opacity: 0.6;
+  }
+  
+  /* Magnetic button effect */
+  .magnetic {
+    transition: transform 0.2s var(--ease-spring);
+  }
+  
+  /* Ripple effect container */
+  .ripple-container {
+    position: relative;
+    overflow: hidden;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+  }
+  /* Staggered page-load reveals */
+  .delay-1 {
+    animation-delay: 0.05s;
+  }
+  .delay-2 {
+    animation-delay: 0.12s;
+  }
+  .delay-3 {
+    animation-delay: 0.19s;
+  }
+  .delay-4 {
+    animation-delay: 0.26s;
+  }
+  .delay-5 {
+    animation-delay: 0.33s;
+  }
+  
+  /* Performance optimizations */
+  .gpu-accelerate {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Smooth scroll */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Advanced Keyframe Animations */
+@keyframes float-glow {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(30px, -30px) scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(79, 174, 83, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 174, 83, 0);
+  }
+}
+
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes check-draw {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Thin scrollbar matching the palette - Enhanced */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--hairline);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--leaf);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
