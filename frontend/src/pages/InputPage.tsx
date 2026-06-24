@@ -10,7 +10,7 @@ import type {
   UploadPreview,
 } from '../types'
 import { sendChat, startRun, uploadExcel } from '../lib/api'
-import { detectContextFields, mockRunId } from '../lib/mock'
+import { parsePastedTable } from '../lib/mock'
 import OrgSourceList from '../components/OrgSourceList'
 import ChatBox from '../components/ChatBox'
 import ContextStatus from '../components/ContextStatus'
@@ -42,31 +42,35 @@ export default function InputPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
   const [preview, setPreview] = useState<UploadPreview | null>(null)
   const [attachment, setAttachment] = useState<Attachment | null>(null)
+  const [captured, setCaptured] = useState<string[]>([])
+  const [ready, setReady] = useState(false)
   const [running, setRunning] = useState(false)
 
-  const fields: ContextField[] = useMemo(() => {
-    const detected = detectContextFields(preview, messages)
-    return FIELD_CONFIG.map((cfg) => ({
-      key: cfg.key,
-      label: cfg.label,
-      required: cfg.required,
-      captured: Boolean(detected[cfg.key]),
-      detail: detected[cfg.key],
-    }))
-  }, [preview, messages])
+  const fields: ContextField[] = useMemo(
+    () =>
+      FIELD_CONFIG.map((cfg) => ({
+        key: cfg.key,
+        label: cfg.label,
+        required: cfg.required,
+        captured: captured.includes(cfg.key),
+        detail: captured.includes(cfg.key) ? 'captured' : undefined,
+      })),
+    [captured],
+  )
 
-  const ready = fields.filter((f) => f.required).every((f) => f.captured)
-  const capturedCount = fields.filter((f) => f.captured).length
+  /** Send one chat turn and fold the assistant's reply + state into the UI. */
+  async function runChatTurn(history: ChatMessage[], current: UploadPreview | null) {
+    const res = await sendChat(history, current)
+    setMessages((prev) => [...prev, { role: 'system', content: res.reply }])
+    setCaptured(res.captured_fields)
+    setReady(res.ready)
+  }
 
-  async function askNext(history: ChatMessage[], current: UploadPreview | null) {
-    const captured = new Set(
-      FIELD_CONFIG.filter((cfg) => detectContextFields(current, history)[cfg.key]).map(
-        (cfg) => cfg.key,
-      ),
-    )
-    const question = await sendChat(history, current, captured)
-    if (question) {
-      setMessages((prev) => [...prev, { role: 'system', content: question }])
+  /** Confirmation line so the user always sees the spreadsheet was processed. */
+  function confirmMessage(p: UploadPreview): ChatMessage {
+    return {
+      role: 'system',
+      content: `Spreadsheet ready: ${p.rows.toLocaleString()} rows × ${p.cols} columns. Add any extra context, or press “Generate program” when you’re ready.`,
     }
   }
 
@@ -76,7 +80,9 @@ export default function InputPage() {
       const result = await uploadExcel(file)
       setPreview(result)
       setAttachment({ state: 'parsed', preview: result })
-      await askNext(messages, result)
+      const next = [...messages, confirmMessage(result)]
+      setMessages(next)
+      await runChatTurn(next, result)
     } catch (err) {
       setAttachment({
         state: 'error',
@@ -86,25 +92,49 @@ export default function InputPage() {
     }
   }
 
+  async function handlePasteTable(text: string) {
+    setAttachment({ state: 'uploading', preview: null })
+    try {
+      const result = parsePastedTable(text)
+      setPreview(result)
+      setAttachment({ state: 'parsed', preview: result })
+      const next = [...messages, confirmMessage(result)]
+      setMessages(next)
+      await runChatTurn(next, result)
+    } catch (err) {
+      setAttachment({
+        state: 'error',
+        preview: null,
+        errorMessage: err instanceof Error ? err.message : 'couldn’t read pasted data',
+      })
+    }
+  }
+
   async function handleSend(text: string) {
     const next = [...messages, { role: 'user' as const, content: text }]
     setMessages(next)
-    await askNext(next, preview)
+    await runChatTurn(next, preview)
   }
 
-  async function handleRun() {
+  const canGenerate = ready || preview !== null
+
+  async function handleGenerate() {
+    if (!canGenerate || running) return
     setRunning(true)
-    const runId = mockRunId()
     const payload: ContextPayload = {
-      run_id: runId,
+      run_id: crypto.randomUUID(),
       excel_data: preview?.excelData ?? [],
       chat_messages: messages,
     }
-    try {
-      const id = await startRun(payload)
+    const id = await startRun(payload)
+    if (id) {
       navigate(`/status?run=${encodeURIComponent(id)}`)
-    } catch {
+    } else {
       setRunning(false)
+      setMessages((prev) => [
+        ...prev,
+        { role: 'system', content: "I couldn't start the run — make sure the backend is running." },
+      ])
     }
   }
 
@@ -112,22 +142,19 @@ export default function InputPage() {
     <ChatBox
       messages={messages}
       attachment={attachment}
+      canGenerate={canGenerate}
+      running={running}
       onSend={handleSend}
       onFile={handleFile}
+      onPasteTable={handlePasteTable}
+      onGenerate={handleGenerate}
       onRemoveAttachment={() => {
         setAttachment(null)
         setPreview(null)
       }}
     />
   )
-  const context = (
-    <ContextStatus
-      fields={fields}
-      ready={ready}
-      running={running}
-      onRun={handleRun}
-    />
-  )
+  const context = <ContextStatus fields={fields} />
 
   return (
     <div className="flex min-h-screen flex-col">

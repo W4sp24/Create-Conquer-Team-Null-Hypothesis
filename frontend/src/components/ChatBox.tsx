@@ -1,6 +1,7 @@
-import { useRef, useState, type DragEvent, type FormEvent } from 'react'
-import { Paperclip, ArrowUp, Sprout } from 'lucide-react'
+import { useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
+import { Paperclip, ArrowUp, Sprout, ArrowRight, Loader2 } from 'lucide-react'
 import type { ChatMessage, ChipState, UploadPreview } from '../types'
+import { looksLikeTable } from '../lib/mock'
 import ExcelUploader from './ExcelUploader'
 
 interface Attachment {
@@ -12,8 +13,12 @@ interface Attachment {
 interface ChatBoxProps {
   messages: ChatMessage[]
   attachment: Attachment | null
+  canGenerate: boolean
+  running: boolean
   onSend: (text: string) => void
   onFile: (file: File) => void
+  onPasteTable: (text: string) => void
+  onGenerate: () => void
   onRemoveAttachment: () => void
 }
 
@@ -22,8 +27,12 @@ const ACCEPTED = ['.xlsx', '.xls', '.csv']
 export default function ChatBox({
   messages,
   attachment,
+  canGenerate,
+  running,
   onSend,
   onFile,
+  onPasteTable,
+  onGenerate,
   onRemoveAttachment,
 }: ChatBoxProps) {
   const [text, setText] = useState('')
@@ -43,6 +52,23 @@ export default function ChatBox({
     setDragOver(false)
     const file = e.dataTransfer.files?.[0]
     if (file && isAccepted(file.name)) onFile(file)
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    // A pasted spreadsheet file → treat like an upload.
+    const file = Array.from(e.clipboardData.files ?? []).find((f) => isAccepted(f.name))
+    if (file) {
+      e.preventDefault()
+      onFile(file)
+      return
+    }
+    // Copied cells from Excel / Sheets come through as tab-delimited text.
+    const pasted = e.clipboardData.getData('text/plain')
+    if (looksLikeTable(pasted)) {
+      e.preventDefault()
+      onPasteTable(pasted)
+    }
+    // Otherwise let it paste into the textarea normally.
   }
 
   return (
@@ -66,6 +92,36 @@ export default function ChatBox({
 
       {/* Composer */}
       <form onSubmit={handleSubmit} className="mt-4 space-y-2.5">
+        {canGenerate && (
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={running}
+            className={
+              running
+                ? 'flex w-full cursor-wait items-center justify-center gap-2 rounded-2xl border border-hairline bg-canvas/60 px-4 py-3 text-[14px] font-semibold text-secondary'
+                : 'glow-on-hover group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-forest to-forest-deep px-4 py-3 text-[14px] font-semibold text-white shadow-card transition-all duration-300 hover:scale-[1.02] hover:shadow-glow active:scale-95 animate-slide-in-up'
+            }
+          >
+            {running ? (
+              <>
+                <Loader2 size={16} strokeWidth={1.8} className="animate-spin" />
+                Starting the agents…
+              </>
+            ) : (
+              <>
+                <Sprout size={16} strokeWidth={1.8} className="text-leaf-bright" />
+                Generate program
+                <ArrowRight
+                  size={16}
+                  strokeWidth={1.8}
+                  className="transition-transform duration-300 group-hover:translate-x-1"
+                />
+              </>
+            )}
+          </button>
+        )}
+
         {attachment && (
           <div className="animate-slide-in-up">
             <ExcelUploader
@@ -96,8 +152,9 @@ export default function ChatBox({
                 handleSubmit(e)
               }
             }}
+            onPaste={handlePaste}
             rows={1}
-            placeholder="Describe your context, or drop a spreadsheet…"
+            placeholder="Describe your context, drop a spreadsheet, or paste cells…"
             className="max-h-40 flex-1 resize-none bg-transparent py-1.5 text-body text-primary outline-none transition-all placeholder:text-secondary"
           />
 

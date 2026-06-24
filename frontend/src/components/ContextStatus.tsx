@@ -1,25 +1,16 @@
-import { Check, Minus, ArrowRight, Loader2 } from 'lucide-react'
+import { Check, Minus } from 'lucide-react'
 import type { ContextField } from '../types'
 
 interface ContextStatusProps {
   fields: ContextField[]
-  ready: boolean
-  running: boolean
-  onRun: () => void
 }
 
 /**
- * Right panel — flat checklist of captured context fields plus the Run button.
- * Field capture is a client-side heuristic over parsed Excel headers + chat
- * keywords; the payload sent to /run stays the real {run_id, excel_data,
- * chat_messages} shape.
+ * Right panel — informational only. A flat checklist of which context fields the
+ * assistant has captured from the chat + spreadsheet. The run is triggered from
+ * inside the chat (the "Generate program" action), not from here.
  */
-export default function ContextStatus({
-  fields,
-  ready,
-  running,
-  onRun,
-}: ContextStatusProps) {
+export default function ContextStatus({ fields }: ContextStatusProps) {
   const missingRequired = fields
     .filter((f) => f.required && !f.captured)
     .map((f) => f.label.toLowerCase())
@@ -89,32 +80,14 @@ export default function ContextStatus({
         ))}
       </ul>
 
-      <button
-        type="button"
-        disabled={!ready || running}
-        onClick={onRun}
-        className={
-          ready && !running
-            ? 'glow-on-hover mt-5 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-forest to-forest-deep px-4 py-3.5 text-[14px] font-semibold text-white shadow-card transition-all duration-300 hover:scale-105 hover:shadow-glow active:scale-95'
-            : 'mt-5 flex cursor-not-allowed items-center justify-center gap-2 rounded-full border border-hairline bg-canvas/50 px-4 py-3.5 text-[14px] font-semibold text-secondary transition-all duration-200'
-        }
-      >
-        {running ? (
-          <>
-            <Loader2 size={16} strokeWidth={1.7} className="animate-spin" />
-            Starting…
-          </>
-        ) : (
-          <>
-            Run Pipeline
-            <ArrowRight size={16} strokeWidth={1.8} className="transition-transform duration-300 group-hover:translate-x-1" />
-          </>
-        )}
-      </button>
-
-      {!ready && missingRequired.length > 0 && (
-        <p className="mt-2.5 text-center text-[12px] text-secondary animate-fade-in">
-          Add {missingRequired.join(', ')} to run.
+      {missingRequired.length > 0 ? (
+        <p className="mt-5 rounded-xl border border-hairline bg-canvas/50 px-3 py-2.5 text-center text-[12px] text-secondary animate-fade-in">
+          Still needed: {missingRequired.join(', ')}. The assistant will ask in chat.
+        </p>
+      ) : (
+        <p className="mt-5 flex items-center justify-center gap-1.5 rounded-xl border border-leaf/40 bg-leaf-soft px-3 py-2.5 text-center text-[12px] font-medium text-forest animate-fade-in">
+          <Check size={13} strokeWidth={2.2} />
+          Ready — generate from the chat.
         </p>
       )}
     </div>

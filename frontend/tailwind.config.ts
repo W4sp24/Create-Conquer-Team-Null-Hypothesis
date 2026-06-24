@@ -11,6 +11,11 @@ export default {
         hairline: '#E7E3D7',
         primary: '#1A1A16',
         secondary: '#6B6B5F',
+        // Text on the dark forest page background (outside white cards)
+        mist: {
+          DEFAULT: '#ECEAE0',
+          muted: '#AEBFAE',
+        },
         forest: {
           DEFAULT: '#2F5233',
           deep: '#1A3320',
@@ -20,6 +25,15 @@ export default {
           DEFAULT: '#4FAE53',
           bright: '#5FBF63',
           soft: '#EAF1E7',
+        },
+        // Secondary accents — used sparingly for badges / highlights
+        gold: {
+          DEFAULT: '#E0A458',
+          soft: '#3A2F1E',
+        },
+        sky: {
+          DEFAULT: '#5BA6B8',
+          soft: '#1E3138',
         },
         accent: {
           DEFAULT: '#2F5233',
