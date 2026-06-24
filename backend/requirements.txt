@@ -1,16 +1,10 @@
 fastapi
 uvicorn[standard]
-sse-starlette
 python-multipart
 pydantic
 openpyxl
-pandas
-pypdf
-python-docx
 chromadb
 sentence-transformers
 groq
 google-generativeai
 python-dotenv
-pytest
-httpx2
