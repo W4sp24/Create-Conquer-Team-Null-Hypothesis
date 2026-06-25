@@ -4,107 +4,122 @@ import ConfirmationSeal from './ConfirmationSeal'
 
 interface ContextStatusProps {
   fields: ContextField[]
+  richness: number
   onReview: () => void
 }
 
 const WHY_TEXT: Record<ContextFieldKey, string> = {
-  region: 'Shapes the climate and infrastructure assumptions in your program.',
-  crop: 'Determines which interventions are relevant at all.',
+  region: 'Shapes climate and infrastructure assumptions.',
+  crop: 'Determines which interventions are relevant.',
   beneficiaries: 'Sets the scale the program is designed for.',
   budget: 'Affects how many rollout phases we can recommend.',
-  staff: 'Affects how many rollout phases your team can realistically run.',
+  staff: 'Affects how many phases your team can run.',
 }
 
-/**
- * Right panel — what we've picked up from chat + spreadsheet, in plain
- * language. Once every required field is captured, this becomes the entry
- * point into the Review Context screen via the footer button.
- */
-export default function ContextStatus({ fields, onReview }: ContextStatusProps) {
+export default function ContextStatus({ fields, richness, onReview }: ContextStatusProps) {
   const missingRequired = fields
     .filter((f) => f.required && !f.captured)
     .map((f) => f.label.toLowerCase())
 
-  const capturedCount = fields.filter((f) => f.captured).length
-  const totalCount = fields.length
-  const progress = (capturedCount / totalCount) * 100
   const ready = missingRequired.length === 0
 
   return (
-    <div className="flex h-full flex-col">
-      <p className="mb-4 text-[13px] leading-relaxed text-secondary">
+    <div className="flex h-full flex-col gap-2.5">
+      {/* Intro */}
+      <p className="text-[12px] leading-relaxed text-secondary">
         What we've picked up from your data and chat.
       </p>
 
-      {/* Progress bar */}
-      <div className="mb-4 overflow-hidden rounded-full bg-canvas/70">
-        <div
-          className="h-1.5 rounded-full bg-gradient-to-r from-leaf to-forest transition-all duration-700 ease-out"
-          style={{ width: `${progress}%` }}
-        />
+      {/* Context richness indicator */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-label text-secondary">
+            Context richness
+          </span>
+          <span className={`text-[12px] font-semibold tabular-nums transition-all duration-500 ${
+            richness >= 80 ? 'text-forest' :
+            richness >= 60 ? 'text-leaf' :
+            'text-secondary'
+          }`}>
+            {richness}%
+          </span>
+        </div>
+        <div className="overflow-hidden rounded-full bg-canvas">
+          <div
+            className="h-1 rounded-full bg-gradient-to-r from-leaf to-forest transition-all duration-700 ease-out"
+            style={{ width: `${richness}%` }}
+          />
+        </div>
+        <p className={`mt-1 text-[10px] transition-colors duration-300 ${
+          richness >= 80 ? 'text-forest' : 'text-secondary'
+        }`}>
+          {richness < 60
+            ? 'Capture region, crop & beneficiaries to improve.'
+            : richness < 80
+              ? 'Add budget & staff for a more detailed program.'
+              : 'Strong context — agents have what they need.'}
+        </p>
       </div>
 
-      <ul className="flex-1 space-y-2">
+      {/* Field checklist */}
+      <ul className="space-y-1.5">
         {fields.map((field, index) => (
           <li
             key={field.key}
             className={
               field.captured
-                ? 'group flex items-center gap-3 rounded-xl border border-leaf/40 bg-leaf-soft px-3 py-2.5 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-bounce-in'
-                : 'group flex items-center gap-3 rounded-xl border border-hairline bg-canvas/50 px-3 py-2.5 transition-all duration-300 hover:border-leaf/30 hover:bg-canvas animate-slide-in-up'
+                ? 'group flex items-start gap-2 rounded-xl border border-leaf/40 bg-leaf-soft px-2.5 py-2 shadow-sm transition-all duration-300 animate-bounce-in'
+                : 'group flex items-start gap-2 rounded-xl border border-hairline bg-canvas px-2.5 py-2 transition-all duration-300 hover:border-leaf/40 hover:bg-leaf-soft animate-slide-in-up'
             }
-            style={{ animationDelay: `${index * 0.1}s` }}
+            style={{ animationDelay: `${index * 0.08}s` }}
           >
             <span
-              className={
+              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
                 field.captured
-                  ? 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-forest text-white shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow'
-                  : 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-hairline text-secondary transition-all duration-300 group-hover:border-leaf group-hover:text-leaf'
-              }
+                  ? 'bg-forest text-white'
+                  : 'border border-hairline text-secondary group-hover:border-leaf group-hover:text-leaf'
+              }`}
             >
               {field.captured ? (
-                <ConfirmationSeal size={13} className="animate-bounce-in" />
+                <ConfirmationSeal size={9} className="animate-bounce-in" />
               ) : (
-                <Minus size={14} strokeWidth={2} />
+                <Minus size={10} strokeWidth={2.5} />
               )}
             </span>
 
             <div className="min-w-0 flex-1">
-              <div
-                className={
-                  field.captured
-                    ? 'text-[14px] font-medium text-primary transition-colors duration-300'
-                    : 'text-[14px] text-secondary transition-colors duration-300 group-hover:text-primary'
-                }
-              >
+              <div className={`text-[12px] font-medium leading-tight ${
+                field.captured ? 'text-primary' : 'text-primary/70'
+              }`}>
                 {field.label}
               </div>
-              {field.detail ? (
-                <div className="text-[12px] text-forest transition-all duration-300 group-hover:text-forest-deep">
-                  {field.detail}
-                </div>
-              ) : (
-                <div className="text-[12px] text-secondary">{WHY_TEXT[field.key]}</div>
-              )}
+              <div className={`mt-0.5 text-[11px] leading-snug ${
+                field.captured ? 'text-forest' : 'text-secondary'
+              }`}>
+                {field.captured && field.detail ? field.detail : WHY_TEXT[field.key]}
+              </div>
             </div>
           </li>
         ))}
       </ul>
 
-      {!ready ? (
-        <p className="mt-5 rounded-xl border border-hairline bg-canvas/50 px-3 py-2.5 text-center text-[12px] text-secondary animate-fade-in">
-          Still needed: {missingRequired.join(', ')}. The assistant will ask in chat.
-        </p>
-      ) : (
-        <button
-          type="button"
-          onClick={onReview}
-          className="mt-5 flex items-center justify-center gap-1.5 rounded-xl border border-leaf/40 bg-leaf-soft px-3 py-2.5 text-center text-[12px] font-medium text-forest transition-all duration-300 hover:scale-[1.02] hover:bg-leaf/20 animate-stamp motion-reduce:animate-fade-in"
-        >
-          <ConfirmationSeal size={14} />
-          Review & generate
-        </button>
-      )}
+      {/* Footer */}
+      <div className="mt-auto">
+        {!ready ? (
+          <p className="rounded-xl border border-hairline bg-canvas px-3 py-2 text-center text-[11px] text-secondary">
+            Still needed: {missingRequired.join(', ')}. The assistant will ask in chat.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={onReview}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-leaf/40 bg-leaf-soft px-3 py-2 text-[12px] font-medium text-forest transition-all duration-300 hover:scale-[1.02] hover:border-leaf hover:shadow-sm animate-stamp motion-reduce:animate-fade-in"
+          >
+            <ConfirmationSeal size={13} />
+            Review & generate
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 from models import ChatMessage
 from agents.base import call_llm_chat, extract_json
@@ -9,6 +10,72 @@ from config import GROQ_FAST
 REQUIRED_FIELDS = ["region", "crop", "beneficiaries"]
 OPTIONAL_FIELDS = ["budget", "staff"]
 ALL_FIELDS = REQUIRED_FIELDS + OPTIONAL_FIELDS
+
+_RICHNESS_WEIGHTS = {"region": 20, "crop": 20, "beneficiaries": 20, "budget": 20, "staff": 15}
+
+# Column name keyword sets for deterministic Excel extraction
+_CROP_KEYWORDS = {"crop", "commodity", "activity", "livelihood", "product", "species", "variety"}
+_REGION_KEYWORDS = {"region", "province", "location", "area", "district", "municipality", "barangay", "place", "site", "zone"}
+_BUDGET_KEYWORDS = {"budget", "fund", "funding", "cost", "amount", "allocation", "expense"}
+_STAFF_KEYWORDS = {"staff", "worker", "employee", "personnel", "extension", "agent", "officer"}
+
+
+def _col_tokens(name: str) -> set[str]:
+    return set(re.split(r"[\s_\-]+", name.lower().strip()))
+
+
+def _extract_excel_context(excel_preview: dict | None) -> tuple[list[str], dict[str, str]]:
+    """Deterministically extract context fields from Excel column names and row count.
+
+    Returns (auto_captured_fields, auto_field_values). These are merged into the
+    [ALREADY CAPTURED] list passed to the LLM so the assistant never re-asks for
+    information the spreadsheet already supplies.
+    """
+    if not excel_preview:
+        return [], {}
+
+    auto_fields: list[str] = []
+    auto_values: dict[str, str] = {}
+
+    # Each row = one farmer/beneficiary in a survey-style spreadsheet
+    row_count = excel_preview.get("rows") or 0
+    if row_count > 0:
+        auto_fields.append("beneficiaries")
+        auto_values["beneficiaries"] = f"{row_count:,} (from survey rows)"
+
+    columns = excel_preview.get("columns") or []
+    sample_rows = excel_preview.get("sample_rows") or []
+
+    for col in columns:
+        col_name = col.get("name", "")
+        tokens = _col_tokens(col_name)
+
+        # Crop: look for crop/activity columns and use first example or sample value
+        if "crop" not in auto_fields and tokens & _CROP_KEYWORDS:
+            examples = [str(e).strip() for e in (col.get("examples") or []) if str(e).strip()]
+            if not examples and sample_rows:
+                examples = [str(sample_rows[0].get(col_name, "")).strip()]
+            if examples and examples[0]:
+                auto_fields.append("crop")
+                auto_values["crop"] = examples[0]
+
+        # Region: look for geographic columns and use first example or sample value
+        if "region" not in auto_fields and tokens & _REGION_KEYWORDS:
+            examples = [str(e).strip() for e in (col.get("examples") or []) if str(e).strip()]
+            if not examples and sample_rows:
+                examples = [str(sample_rows[0].get(col_name, "")).strip()]
+            if examples and examples[0]:
+                auto_fields.append("region")
+                auto_values["region"] = examples[0]
+
+    return auto_fields, auto_values
+
+
+def _compute_richness(captured: list[str], excel_preview: dict | None) -> int:
+    score = sum(v for k, v in _RICHNESS_WEIGHTS.items() if k in captured)
+    if excel_preview:
+        score += 5
+    return min(score, 100)
 
 SYSTEM_PROMPT = """You are the intake assistant for AniKonsulta, a tool that designs \
 context-adapted social programs for smallholder agriculture and livelihood NGOs.
@@ -33,16 +100,23 @@ You track these context fields:
 - staff         (optional) — number and roles of field staff
 
 STRICT RULES — follow these exactly:
-1. The "Already captured" list in the user message is authoritative. NEVER ask about \
-any field that appears there. Do not re-confirm, re-clarify, or mention it again.
-2. Scan the ENTIRE conversation history and spreadsheet summary before deciding what is \
-still missing. If a field can be inferred from prior messages, mark it captured.
-3. Ask for exactly ONE missing REQUIRED field per reply. Do not stack multiple questions.
-4. Once all three REQUIRED fields are captured, set "ready": true and stop asking \
-questions entirely — give a warm single-sentence confirmation and invite the user to \
-generate the program.
-5. If the user is stuck, help them think it through instead of repeating the same question.
-6. Never invent data the user did not provide.
+1. The [ALREADY CAPTURED] list is authoritative and PERMANENT. NEVER ask about any field \
+that appears there. Do not re-confirm, re-clarify, or mention it again.
+2. Extract aggressively from all sources — chat AND spreadsheet:
+   - From chat: "We farm in coastal Cebu" → region = "Coastal Cebu". "We grow corn" → crop = "corn".
+   - From the spreadsheet row count: each row is one farmer/beneficiary. \
+"5,000 rows" → beneficiaries = "5,000 farmers". ALWAYS extract beneficiaries from row count.
+   - From column names and values: a column named "crop_type", "commodity", or "activity" → \
+extract its dominant value as the crop. A column named "region", "province", "barangay", or \
+"location" → extract its dominant value as the region.
+   - Do not ask for information that is already present in the spreadsheet data.
+3. CRITICAL — captured_fields MUST always include every field from [ALREADY CAPTURED], \
+plus any new ones captured this turn. Never shrink the list.
+4. Ask for exactly ONE missing REQUIRED field per reply. Do not stack questions.
+5. Once all three REQUIRED fields are captured, set "ready": true and stop asking — give \
+a warm single-sentence confirmation and invite the user to generate the program.
+6. If the user is stuck, help them reason through it instead of repeating the question.
+7. Never invent data the user did not provide.
 
 Return ONLY valid JSON, no prose outside it:
 {
@@ -162,7 +236,15 @@ async def run_chat_assistant(
     Falls back to a safe deterministic question on any LLM/parse failure.
     """
     captured_so_far = previously_captured or []
-    messages = _build_messages(chat_messages, excel_preview, captured_so_far)
+
+    # Deterministically extract what the spreadsheet itself already provides.
+    # These are merged into [ALREADY CAPTURED] so the LLM never re-asks for them.
+    excel_auto_fields, excel_auto_values = _extract_excel_context(excel_preview)
+    enhanced_captured = list(dict.fromkeys(
+        [f for f in ALL_FIELDS if f in (set(captured_so_far) | set(excel_auto_fields))]
+    ))
+
+    messages = _build_messages(chat_messages, excel_preview, enhanced_captured)
 
     try:
         raw = await call_llm_chat(
@@ -176,14 +258,20 @@ async def run_chat_assistant(
             raise ValueError("expected a JSON object")
 
         reply = str(parsed.get("reply") or "").strip()
-        captured = [f for f in parsed.get("captured_fields", []) if f in ALL_FIELDS]
+        llm_captured = [f for f in parsed.get("captured_fields", []) if f in ALL_FIELDS]
+        # Final merge: enhanced_captured (excel + history) union LLM output — only grows.
+        captured = list(dict.fromkeys(
+            [f for f in ALL_FIELDS if f in (set(enhanced_captured) | set(llm_captured))]
+        ))
         raw_values = parsed.get("field_values") or {}
-        field_values = {
+        llm_values = {
             f: str(raw_values[f]).strip()
             for f in captured
             if f in raw_values and str(raw_values[f]).strip()
         }
-        # Single authoritative readiness check — all required fields must be captured.
+        # Excel auto-values as baseline; LLM values (from chat) take precedence.
+        field_values = {**excel_auto_values, **llm_values}
+
         ready = all(f in captured for f in REQUIRED_FIELDS)
 
         if not reply:
@@ -194,14 +282,16 @@ async def run_chat_assistant(
             "captured_fields": captured,
             "field_values": field_values,
             "ready": ready,
+            "context_richness": _compute_richness(captured, excel_preview),
         }
 
     except Exception:
         return {
-            "reply": _fallback_reply(captured_so_far),
-            "captured_fields": captured_so_far,
-            "field_values": {},
-            "ready": False,
+            "reply": _fallback_reply(enhanced_captured),
+            "captured_fields": enhanced_captured,
+            "field_values": excel_auto_values,
+            "ready": all(f in enhanced_captured for f in REQUIRED_FIELDS),
+            "context_richness": _compute_richness(enhanced_captured, excel_preview),
         }
 
 

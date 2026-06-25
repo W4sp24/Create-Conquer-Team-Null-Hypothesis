@@ -112,7 +112,7 @@ export default function ChatBox({
           className={
             ready
               ? 'glow-on-hover group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-forest to-forest-deep px-4 py-3 text-[14px] font-semibold text-white shadow-card transition-all duration-300 hover:scale-[1.02] hover:shadow-glow active:scale-95 animate-slide-in-up'
-              : 'flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-hairline bg-canvas/40 px-4 py-3 text-[14px] font-medium text-secondary'
+              : 'flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-hairline bg-leaf-soft px-4 py-3 text-[14px] font-medium text-forest/60'
           }
         >
           {ready ? (
@@ -141,7 +141,7 @@ export default function ChatBox({
           </div>
         )}
 
-        <div className="group flex items-end gap-2 rounded-2xl border border-hairline bg-canvas/70 px-3 py-2.5 shadow-sm transition-all duration-300 focus-within:border-leaf focus-within:bg-panel focus-within:shadow-glow">
+        <div className="group flex items-end gap-2 rounded-2xl border border-hairline bg-canvas px-3 py-2.5 shadow-sm transition-all duration-300 focus-within:border-leaf focus-within:bg-panel focus-within:shadow-glow">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -173,7 +173,7 @@ export default function ChatBox({
             className={
               text.trim()
                 ? 'flex h-9 w-9 items-center justify-center rounded-xl bg-forest text-white shadow-sm transition-all duration-300 hover:scale-110 hover:bg-forest-deep hover:shadow-glow active:scale-95'
-                : 'flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-hairline text-secondary transition-all duration-200'
+                : 'flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-leaf/20 bg-leaf-soft text-forest/40 transition-all duration-200'
             }
           >
             <ArrowUp size={17} strokeWidth={1.8} />

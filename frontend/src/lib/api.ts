@@ -67,12 +67,18 @@ export async function sendChat(
   })
 
   if (backend) return backend
+  const REQUIRED = ['region', 'crop', 'beneficiaries']
+  const weights: Record<string, number> = { region: 20, crop: 20, beneficiaries: 20, budget: 20, staff: 15 }
+  const richness = Object.entries(weights)
+    .filter(([k]) => capturedFields.includes(k))
+    .reduce((s, [, v]) => s + v, 0)
   return {
     reply: "I couldn't reach the assistant — make sure the backend is running.",
-    captured_fields: [],
+    captured_fields: capturedFields,
     field_values: {},
-    ready: false,
-    missing_required: ['region', 'crop', 'beneficiaries'],
+    ready: REQUIRED.every((f) => capturedFields.includes(f)),
+    missing_required: REQUIRED.filter((f) => !capturedFields.includes(f)),
+    context_richness: richness,
   }
 }
 
