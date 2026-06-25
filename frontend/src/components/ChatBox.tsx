@@ -1,5 +1,5 @@
 import { useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
-import { Paperclip, ArrowUp, Sprout, ArrowRight, Loader2 } from 'lucide-react'
+import { Paperclip, ArrowUp, Sprout, ArrowRight } from 'lucide-react'
 import type { ChatMessage, ChipState, UploadPreview } from '../types'
 import { looksLikeTable } from '../lib/mock'
 import ExcelUploader from './ExcelUploader'
@@ -13,8 +13,8 @@ interface Attachment {
 interface ChatBoxProps {
   messages: ChatMessage[]
   attachment: Attachment | null
-  canGenerate: boolean
-  running: boolean
+  ready: boolean
+  missingRequired: string[]
   onSend: (text: string) => void
   onFile: (file: File) => void
   onPasteTable: (text: string) => void
@@ -22,13 +22,20 @@ interface ChatBoxProps {
   onRemoveAttachment: () => void
 }
 
+/** "Add region, crop & beneficiaries to continue" — joins missing required fields. */
+function formatMissingMessage(missing: string[]): string {
+  if (missing.length === 0) return 'Add more context to continue'
+  if (missing.length === 1) return `Add ${missing[0]} to continue`
+  return `Add ${missing.slice(0, -1).join(', ')} & ${missing[missing.length - 1]} to continue`
+}
+
 const ACCEPTED = ['.xlsx', '.xls', '.csv']
 
 export default function ChatBox({
   messages,
   attachment,
-  canGenerate,
-  running,
+  ready,
+  missingRequired,
   onSend,
   onFile,
   onPasteTable,
@@ -92,35 +99,30 @@ export default function ChatBox({
 
       {/* Composer */}
       <form onSubmit={handleSubmit} className="mt-4 space-y-2.5">
-        {canGenerate && (
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={running}
-            className={
-              running
-                ? 'flex w-full cursor-wait items-center justify-center gap-2 rounded-2xl border border-hairline bg-canvas/60 px-4 py-3 text-[14px] font-semibold text-secondary'
-                : 'glow-on-hover group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-forest to-forest-deep px-4 py-3 text-[14px] font-semibold text-white shadow-card transition-all duration-300 hover:scale-[1.02] hover:shadow-glow active:scale-95 animate-slide-in-up'
-            }
-          >
-            {running ? (
-              <>
-                <Loader2 size={16} strokeWidth={1.8} className="animate-spin" />
-                Starting the agents…
-              </>
-            ) : (
-              <>
-                <Sprout size={16} strokeWidth={1.8} className="text-leaf-bright" />
-                Generate program
-                <ArrowRight
-                  size={16}
-                  strokeWidth={1.8}
-                  className="transition-transform duration-300 group-hover:translate-x-1"
-                />
-              </>
-            )}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={!ready}
+          className={
+            ready
+              ? 'glow-on-hover group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-forest to-forest-deep px-4 py-3 text-[14px] font-semibold text-white shadow-card transition-all duration-300 hover:scale-[1.02] hover:shadow-glow active:scale-95 animate-slide-in-up'
+              : 'flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-hairline bg-canvas/40 px-4 py-3 text-[14px] font-medium text-secondary'
+          }
+        >
+          {ready ? (
+            <>
+              <Sprout size={16} strokeWidth={1.8} className="text-leaf-bright" />
+              Review your context
+              <ArrowRight
+                size={16}
+                strokeWidth={1.8}
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              />
+            </>
+          ) : (
+            formatMissingMessage(missingRequired)
+          )}
+        </button>
 
         {attachment && (
           <div className="animate-slide-in-up">
