@@ -6,6 +6,7 @@ import {
   Users,
   ShieldAlert,
   BookMarked,
+  FolderOpen,
   Wand2,
 } from 'lucide-react'
 import type { ProgramOutput as Program } from '../types'
@@ -159,15 +160,23 @@ export default function ProgramOutput({ program }: { program: Program }) {
 
       {/* Citations */}
       {program.citations.length > 0 && (
-        <Section icon={<BookMarked size={16} strokeWidth={1.7} />} title="Citations" delay={6}>
-          <ul className="space-y-1.5">
-            {program.citations.map((c, i) => (
-              <li key={i} className="text-[13px] text-secondary">
-                {c}
-              </li>
-            ))}
-          </ul>
-        </Section>
+        <div id="citations">
+          <Section icon={<BookMarked size={16} strokeWidth={1.7} />} title="Citations" delay={6}>
+            <CitationGroup
+              icon={<BookMarked size={14} strokeWidth={1.7} className="text-forest" />}
+              label="Specialized knowledge base"
+              items={program.citations.filter((c) => c.startsWith('[Global:'))}
+            />
+            <CitationGroup
+              icon={<FolderOpen size={14} strokeWidth={1.7} className="text-forest" />}
+              label="Your organization's documents"
+              items={program.citations.filter((c) => c.startsWith('[Org:'))}
+            />
+            {program.citations.every((c) => !c.startsWith('[Global:') && !c.startsWith('[Org:')) && (
+              <p className="text-[13px] text-secondary">{program.citations[0]}</p>
+            )}
+          </Section>
+        </div>
       )}
     </div>
   )
@@ -265,5 +274,32 @@ function GroundingBadge({ citations }: { citations: string[] }) {
         {global} specialized{org > 0 ? ` + ${org} your docs` : ''}
       </span>
     </button>
+  )
+}
+
+function CitationGroup({
+  icon,
+  label,
+  items,
+}: {
+  icon: React.ReactNode
+  label: string
+  items: string[]
+}) {
+  if (items.length === 0) return null
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-label text-secondary">
+        {icon}
+        {label}
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((c, i) => (
+          <li key={i} className="text-[13px] text-secondary">
+            {c}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
