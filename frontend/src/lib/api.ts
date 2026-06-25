@@ -8,6 +8,7 @@ import type {
   CompareResponse,
   ContextPayload,
   ProgramOutput,
+  RoadmapOutput,
   SourceMetadata,
   UploadPreview,
 } from '../types'
@@ -124,6 +125,17 @@ export async function uploadSource(
   const form = new FormData()
   form.append('file', file)
   return tryJson('/api/sources/upload', { method: 'POST', body: form })
+}
+
+/**
+ * Generate an AI roadmap for a completed program run.
+ * POSTs to /api/roadmap/{run_id} and returns the structured RoadmapOutput,
+ * or null on failure / run not yet complete.
+ */
+export async function generateRoadmap(runId: string): Promise<RoadmapOutput | null> {
+  return tryJson<RoadmapOutput>(`/api/roadmap/${encodeURIComponent(runId)}`, {
+    method: 'POST',
+  })
 }
 
 /** Remove a source (all its chunks) from the org knowledge base. */

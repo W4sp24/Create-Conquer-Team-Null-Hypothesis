@@ -29,9 +29,10 @@ async def health():
 
 
 # Routers for API endpoints
-from routes import run, input, sources, compare
+from routes import run, input, sources, compare, roadmap
 
 app.include_router(run.router)
 app.include_router(input.router)
 app.include_router(sources.router)
 app.include_router(compare.router)
+app.include_router(roadmap.router)
