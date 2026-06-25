@@ -24,6 +24,18 @@ async def _synthesize_llm(user_prompt: str, system_prompt: str) -> str:
         return await call_llm("groq", GROQ_LARGE, user_prompt, system_prompt=system_prompt)
 
 
+_FALLBACK_PHASES: dict[str, list[str]] = {
+    "market linkage": ["Market assessment", "Buyer identification", "Pilot linkages", "Full rollout"],
+    "market":         ["Market assessment", "Buyer identification", "Pilot linkages", "Full rollout"],
+    "input":          ["Needs assessment", "Supplier mapping", "Pilot distribution", "Scale-up"],
+    "credit":         ["Eligibility screening", "Pilot lending", "Repayment monitoring", "Expansion"],
+    "finance":        ["Eligibility screening", "Pilot lending", "Repayment monitoring", "Expansion"],
+    "extension":      ["Extension planning", "Field demonstration", "Adoption monitoring", "Consolidation"],
+    "post-harvest":   ["Storage assessment", "Infrastructure setup", "Pilot operations", "Full rollout"],
+    "cooperative":    ["Cooperative formation", "Governance training", "Pilot operations", "Scale-up"],
+}
+
+
 async def run_synthesizer(
     retrieved: RetrievedDocs,
     analyst: DataAnalystOutput,
@@ -31,6 +43,7 @@ async def run_synthesizer(
     risk: RiskMneOutput,
     run_id: str,
     sse_queue: asyncio.Queue,
+    goal: str = "",
 ) -> ProgramOutput:
     """Synthesize all agent outputs into a complete program using GEMINI_MAIN."""
     
@@ -85,10 +98,11 @@ Rules:
 - Be specific and actionable, not generic"""
 
         # User prompt
-        user_prompt = f"""Context:
+        goal_line = f"Program type: {goal}.\n" if goal else ""
+        user_prompt = f"""{goal_line}Context:
 {context_summary}
 
-Create a complete program document as JSON."""
+Create a complete program document for this program type as JSON."""
 
         # Call LLM for the parts that need generation (Gemini → Groq fallback)
         raw_response = await _synthesize_llm(user_prompt, system_prompt)
@@ -126,20 +140,24 @@ Create a complete program document as JSON."""
                     activities=phase_data.get("activities", []),
                 ))
         
-        # Fallback if no phases generated
+        # Fallback if no phases generated — goal-sensitive activities
         if not rollout_phases:
+            first_word = goal.lower().split()[0] if goal else ""
+            phase_acts = _FALLBACK_PHASES.get(first_word, [
+                "Program orientation", "Pilot phase", "Full rollout", "Monitoring & evaluation"
+            ])
             rollout_phases = [
                 RolloutPhase(
                     phase=1,
                     name="Pilot",
                     duration="3 months",
-                    activities=["Farmer orientation", "Demo plot setup", "Initial training"],
+                    activities=phase_acts[:2],
                 ),
                 RolloutPhase(
                     phase=2,
                     name="Scale-up",
                     duration="6 months",
-                    activities=["Full rollout", "Field monitoring", "Mid-season assessment"],
+                    activities=phase_acts[2:],
                 ),
             ]
         
@@ -180,11 +198,12 @@ Create a complete program document as JSON."""
         
         crop = analyst.crop_type or "crop"
         region = analyst.region or "target area"
-        title = f"{adapter.intervention_name} — {region.title()} {crop.title()} Program"
-        
+        goal_label = goal.title() if goal else "Program"
+        title = f"{adapter.intervention_name} — {region.title()} {crop.title()} {goal_label}"
+
         count_str = f"{analyst.beneficiary_count:,}" if analyst.beneficiary_count else "Enrolled"
         target_beneficiaries = f"{count_str} smallholder {crop} farmers in {region} areas"
-        
+
         staff_count = analyst.staff_count or 6
         field_officers = max(1, staff_count - 2)
         staff_roles = [
@@ -192,9 +211,14 @@ Create a complete program document as JSON."""
             "M&E coordinator (×1)",
             "Program manager (×1)",
         ]
-        
+
         citations = _build_citations(retrieved)
-        
+
+        first_word = goal.lower().split()[0] if goal else ""
+        phase_acts = _FALLBACK_PHASES.get(first_word, [
+            "Program orientation", "Pilot phase", "Full rollout", "Monitoring & evaluation"
+        ])
+
         return ProgramOutput(
             run_id=run_id,
             title=title,
@@ -205,13 +229,13 @@ Create a complete program document as JSON."""
                     phase=1,
                     name="Pilot",
                     duration="3 months",
-                    activities=["Farmer orientation", "Demo plot setup", "Initial training"],
+                    activities=phase_acts[:2],
                 ),
                 RolloutPhase(
                     phase=2,
                     name="Scale-up",
                     duration="6 months",
-                    activities=["Full rollout", "Field monitoring", "Mid-season assessment"],
+                    activities=phase_acts[2:],
                 ),
             ],
             staff_roles=staff_roles,

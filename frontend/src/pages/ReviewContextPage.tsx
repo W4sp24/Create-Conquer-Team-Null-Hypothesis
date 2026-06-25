@@ -6,13 +6,14 @@ import ConfirmationSeal from '../components/ConfirmationSeal'
 import { startRun } from '../lib/api'
 
 const FIELD_LABELS: Record<string, string> = {
+  goal: 'Program goal',
   region: 'Region & conditions',
   crop: 'Crop / activity',
   beneficiaries: 'Beneficiaries',
   budget: 'Budget',
   staff: 'Staff',
 }
-const FIELD_ORDER = ['region', 'crop', 'beneficiaries', 'budget', 'staff']
+const FIELD_ORDER = ['goal', 'region', 'crop', 'beneficiaries', 'budget', 'staff']
 
 /**
  * The pause-before-the-pipeline-runs checkpoint: shows every context field the
@@ -36,6 +37,7 @@ export default function ReviewContextPage() {
       run_id: crypto.randomUUID(),
       excel_data: state!.preview?.excelData ?? [],
       chat_messages: state!.messages,
+      goal: state!.fieldValues?.goal ?? '',
     }
     const id = await startRun(payload)
     if (id) {

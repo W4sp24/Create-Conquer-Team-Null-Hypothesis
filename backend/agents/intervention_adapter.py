@@ -30,7 +30,7 @@ async def run_intervention_adapter(
         )
         
         # System prompt
-        system_prompt = """You are an agricultural intervention specialist.
+        system_prompt = """You are an agricultural program specialist.
 Your job: select the most appropriate intervention from the evidence base and adapt it to local context.
 
 Return ONLY valid JSON matching this schema:
@@ -48,13 +48,14 @@ Rules:
 - If no evidence, suggest a general best practice but note the limitation"""
 
         # User prompt
-        user_prompt = f"""Evidence from knowledge base:
+        goal_line = f"Program type: {context.goal}.\n" if context.goal else ""
+        user_prompt = f"""{goal_line}Evidence from knowledge base:
 {evidence_summary}
 
 Organization context:
 {chat_summary}
 
-Select and adapt an intervention as JSON."""
+Select and adapt an intervention for this program type as JSON."""
 
         # Call LLM
         raw_response = await call_llm(

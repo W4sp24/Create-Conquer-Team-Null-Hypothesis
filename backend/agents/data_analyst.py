@@ -43,7 +43,8 @@ Rules:
 - Be conservative — if unsure, use null"""
 
         # User prompt
-        user_prompt = f"""Excel data summary:
+        goal_line = f"Program goal: {context.goal}.\n" if context.goal else ""
+        user_prompt = f"""{goal_line}Excel data summary:
 {excel_summary}
 
 Chat context:

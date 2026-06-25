@@ -31,7 +31,7 @@ async def run_risk_mne_agent(
         )
         
         # System prompt
-        system_prompt = """You are a risk assessment and M&E specialist for agricultural programs.
+        system_prompt = """You are a risk assessment and M&E specialist for agricultural livelihood programs.
 
 Return ONLY valid JSON matching this schema:
 {
@@ -56,13 +56,14 @@ Rules:
 - confidence_score reflects data quality (0.0 = no data, 1.0 = comprehensive data)"""
 
         # User prompt
-        user_prompt = f"""Evidence from knowledge base:
+        goal_line = f"Program goal: {context.goal}.\n" if context.goal else ""
+        user_prompt = f"""{goal_line}Evidence from knowledge base:
 {evidence_summary}
 
 Organization context:
 {chat_summary}
 
-Assess risks and define KPIs as JSON."""
+Assess risks and define KPIs appropriate for this program type as JSON."""
 
         # Call LLM
         raw_response = await call_llm(

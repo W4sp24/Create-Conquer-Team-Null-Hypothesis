@@ -7,11 +7,11 @@ from config import GROQ_FAST
 
 # Context fields the intake assistant tracks. Required ones must be captured
 # before the pipeline can run; optional ones enrich the program but don't gate it.
-REQUIRED_FIELDS = ["region", "crop", "beneficiaries"]
+REQUIRED_FIELDS = ["goal", "region", "crop", "beneficiaries"]
 OPTIONAL_FIELDS = ["budget", "staff"]
 ALL_FIELDS = REQUIRED_FIELDS + OPTIONAL_FIELDS
 
-_RICHNESS_WEIGHTS = {"region": 20, "crop": 20, "beneficiaries": 20, "budget": 20, "staff": 15}
+_RICHNESS_WEIGHTS = {"goal": 15, "region": 20, "crop": 20, "beneficiaries": 20, "budget": 20, "staff": 15}
 
 # Known crop/activity values — used to classify columns by their data, not just name
 _CROP_VALUES = {
@@ -119,6 +119,10 @@ context-adapted social programs for smallholder agriculture and livelihood NGOs.
 Your job is to gather context needed to generate a program while being genuinely helpful.
 
 You track these context fields:
+- goal          (REQUIRED) — the type of program the user wants to design. Ask this FIRST. \
+Examples: farmer training, market linkage, input supply, credit & finance, extension services, \
+post-harvest management, cooperative development. Accept free-form answers — the user knows \
+what they need.
 - region        (REQUIRED) — geographic area and local conditions
 - crop          (REQUIRED) — the crop or livelihood activity
 - beneficiaries (REQUIRED) — how many people are targeted
@@ -346,8 +350,10 @@ async def run_chat_assistant(
 def _fallback_reply(captured: list[str]) -> str:
     """Deterministic next-question when the LLM output is unusable."""
     required_prompts = {
+        "goal": "What kind of program are you looking to design? For example: farmer training, "
+                "market linkage, input supply, credit & finance, or extension services.",
         "region": "Which region is this for, and what are the local conditions "
-        "(infrastructure, weather, terrain)?",
+                  "(infrastructure, weather, terrain)?",
         "crop": "What crop or livelihood activity is the focus?",
         "beneficiaries": "Roughly how many beneficiaries are you targeting?",
     }
