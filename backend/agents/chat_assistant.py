@@ -32,20 +32,17 @@ You track these context fields:
 - budget        (optional) — total funds and period
 - staff         (optional) — number and roles of field staff
 
-Rules:
-- NEVER ask for a field that is already listed in the "Already captured" section of the \
-user message. If region is already captured, do not ask about region again under any \
-circumstances.
-- Consider both the chat conversation AND the spreadsheet summary when deciding which \
-fields are captured. A field counts as captured if it is clearly present in either.
-- Ask for ONE missing REQUIRED field at a time, with a concrete, data-aware question. \
-Do not interrogate — keep it conversational.
-- If all REQUIRED fields are captured, set "ready" to true, give a warm confirmation, \
-and invite the user to generate the program (they may still add budget/staff for a \
-richer plan). Do not keep asking questions once all required fields are captured.
-- If the user is stuck on a required field, help them think it through instead of just \
-repeating the question.
-- Never invent data the user did not provide.
+STRICT RULES — follow these exactly:
+1. The "Already captured" list in the user message is authoritative. NEVER ask about \
+any field that appears there. Do not re-confirm, re-clarify, or mention it again.
+2. Scan the ENTIRE conversation history and spreadsheet summary before deciding what is \
+still missing. If a field can be inferred from prior messages, mark it captured.
+3. Ask for exactly ONE missing REQUIRED field per reply. Do not stack multiple questions.
+4. Once all three REQUIRED fields are captured, set "ready": true and stop asking \
+questions entirely — give a warm single-sentence confirmation and invite the user to \
+generate the program.
+5. If the user is stuck, help them think it through instead of repeating the same question.
+6. Never invent data the user did not provide.
 
 Return ONLY valid JSON, no prose outside it:
 {
@@ -56,7 +53,7 @@ Return ONLY valid JSON, no prose outside it:
 }
 
 For every field listed in captured_fields, include a short (under 12 words)
-plain-language value for it in field_values -- what you actually understood
+plain-language value for it in field_values — what you actually understood
 from the conversation or spreadsheet, not a restatement of the question.
 """
 
@@ -113,7 +110,8 @@ def _build_messages(
 
     - Frontend role "user"   → API role "user"
     - Frontend role "system" → API role "assistant" (these are the bot's prior replies)
-    - Appends the spreadsheet summary + grounding context as the final user message.
+    - Prepends a [CONTEXT] block to the system prompt so the model sees captured fields
+      before any user turn, then appends spreadsheet + RAG excerpts to the final user turn.
     """
     messages: list[dict] = []
 
@@ -124,16 +122,18 @@ def _build_messages(
             # "system" role on the frontend means an assistant reply
             messages.append({"role": "assistant", "content": m.content})
 
-    # Build the grounding context appended to the final user turn
+    # Build captured-fields line — placed prominently at the START of the grounding block.
     if previously_captured:
-        captured_line = f"Already captured: {', '.join(previously_captured)}"
+        captured_line = (
+            f"[ALREADY CAPTURED — do NOT ask about these again: {', '.join(previously_captured)}]"
+        )
     else:
-        captured_line = "Already captured: none yet"
+        captured_line = "[ALREADY CAPTURED: none yet]"
 
     final_turn = (
         f"{captured_line}\n\n"
         f"Spreadsheet summary:\n{_excel_summary(excel_preview)}\n\n"
-        "Respond to the latest user message and report which context fields are captured."
+        "Respond to the latest user message and report which context fields are now captured."
     )
 
     # If the last message is a user message, augment it with context.

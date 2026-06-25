@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Sprout, FolderOpen, MessagesSquare, ListChecks } from 'lucide-react'
+import { Sprout, FolderOpen, MessagesSquare, ListChecks, RotateCcw } from 'lucide-react'
 import type {
   ChatMessage,
   ChipState,
@@ -213,7 +213,6 @@ export default function InputPage() {
         setAttachment(null)
         setPreview(null)
       }}
-      onReset={handleReset}
     />
   )
   const context = <ContextStatus fields={fields} onReview={goToReview} />
@@ -241,6 +240,19 @@ export default function InputPage() {
             label="Chat"
             className="animate-rise delay-3"
             bodyClassName="flex-1"
+            headerAction={
+              messages.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  title="Reset conversation"
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-secondary transition-all duration-200 hover:bg-cream hover:text-primary"
+                >
+                  <RotateCcw size={13} strokeWidth={1.8} />
+                  Reset
+                </button>
+              ) : null
+            }
           >
             {chat}
           </PanelCard>
@@ -262,6 +274,19 @@ export default function InputPage() {
             label="Chat"
             className="min-h-[480px] max-h-[680px]"
             bodyClassName="flex-1"
+            headerAction={
+              messages.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  title="Reset conversation"
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-secondary transition-all duration-200 hover:bg-cream hover:text-primary"
+                >
+                  <RotateCcw size={13} strokeWidth={1.8} />
+                  Reset
+                </button>
+              ) : null
+            }
           >
             {chat}
           </PanelCard>
@@ -366,12 +391,14 @@ function PanelCard({
   children,
   className = '',
   bodyClassName = '',
+  headerAction,
 }: {
   icon: React.ReactNode
   label: string
   children: React.ReactNode
   className?: string
   bodyClassName?: string
+  headerAction?: React.ReactNode
 }) {
   return (
     <section className={`card-surface group flex flex-col overflow-hidden transition-all duration-500 hover:shadow-card-hover ${className}`}>
@@ -382,7 +409,10 @@ function PanelCard({
         <span className="text-label font-semibold uppercase tracking-label text-forest transition-colors duration-300 group-hover:text-forest-deep">
           {label}
         </span>
-        <Spark size={10} className="ml-auto text-leaf opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:animate-sparkle" />
+        {headerAction
+          ? <div className="ml-auto">{headerAction}</div>
+          : <Spark size={10} className="ml-auto text-leaf opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:animate-sparkle" />
+        }
       </div>
       <div className={`flex flex-1 flex-col overflow-hidden p-5 ${bodyClassName}`}>{children}</div>
     </section>

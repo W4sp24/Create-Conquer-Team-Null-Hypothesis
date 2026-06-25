@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
-import { Paperclip, ArrowUp, Sprout, ArrowRight, RotateCcw } from 'lucide-react'
+import { Paperclip, ArrowUp, Sprout, ArrowRight } from 'lucide-react'
 import type { ChatMessage, ChipState, UploadPreview } from '../types'
 import { looksLikeTable } from '../lib/mock'
 import ExcelUploader from './ExcelUploader'
@@ -20,7 +20,6 @@ interface ChatBoxProps {
   onPasteTable: (text: string) => void
   onGenerate: () => void
   onRemoveAttachment: () => void
-  onReset: () => void
 }
 
 /** "Add region, crop & beneficiaries to continue" — joins missing required fields. */
@@ -42,7 +41,6 @@ export default function ChatBox({
   onPasteTable,
   onGenerate,
   onRemoveAttachment,
-  onReset,
 }: ChatBoxProps) {
   const [text, setText] = useState('')
   const [dragOver, setDragOver] = useState(false)
@@ -97,21 +95,6 @@ export default function ChatBox({
       }}
       onDrop={handleDrop}
     >
-      {/* Reset button — top right, only visible when there are user messages */}
-      {messages.length > 1 && (
-        <div className="absolute right-0 top-0 z-10">
-          <button
-            type="button"
-            onClick={onReset}
-            title="Reset conversation"
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-secondary transition-all duration-200 hover:bg-cream hover:text-primary"
-          >
-            <RotateCcw size={13} strokeWidth={1.8} />
-            Reset
-          </button>
-        </div>
-      )}
-
       {/* Message thread */}
       <div className="flex-1 min-h-0 space-y-5 overflow-y-auto pr-1 smooth-scroll">
         {messages.map((m, i) => (
