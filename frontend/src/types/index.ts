@@ -130,3 +130,13 @@ export interface ContextField {
   /** Whether this field is required before a run can start. */
   required: boolean
 }
+
+/** Carried via React Router navigation `state` between `/` and `/review` — keeps chat history and captured context alive across that round trip without a global store. */
+export interface ReviewNavState {
+  messages: ChatMessage[]
+  preview: UploadPreview | null
+  captured: string[]
+  fieldValues: Record<string, string>
+  missingRequired: string[]
+  ready: boolean
+}
