@@ -31,12 +31,19 @@ export default function ProgramOutput({ program }: { program: Program }) {
           <Target size={16} strokeWidth={1.7} className="mt-1 shrink-0 text-forest" />
           {program.target_beneficiaries}
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Stat label="Confidence" value={`${Math.round(program.confidence_level * 100)}%`} />
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span
+            className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary"
+            title="Reflects how complete and specific the input data was — more detail in your Excel/chat context raises this score."
+          >
+            Confidence:{' '}
+            <span className="font-semibold text-primary">{Math.round(program.confidence_level * 100)}%</span>
+          </span>
           <RiskBadge level={risk.risk_level} />
           {program.per_beneficiary_cost_usd != null && (
             <Stat label="Cost / beneficiary" value={`$${program.per_beneficiary_cost_usd}`} />
           )}
+          <GroundingBadge citations={program.citations} />
         </div>
       </div>
 
@@ -218,5 +225,45 @@ function RiskList({ title, items, empty }: { title: string; items: string[]; emp
         </ul>
       )}
     </div>
+  )
+}
+
+function countCitationsBySource(citations: string[]): { global: number; org: number; none: boolean } {
+  let global = 0
+  let org = 0
+  for (const c of citations) {
+    if (c.startsWith('[Global:')) global++
+    else if (c.startsWith('[Org:')) org++
+  }
+  return { global, org, none: global === 0 && org === 0 }
+}
+
+function GroundingBadge({ citations }: { citations: string[] }) {
+  const { global, org, none } = countCitationsBySource(citations)
+
+  function scrollToCitations() {
+    document.getElementById('citations')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  if (none) {
+    return (
+      <span className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary">
+        No sources retrieved yet
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={scrollToCitations}
+      className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary transition-colors hover:border-leaf hover:text-forest"
+      title="Jump to the full source list at the bottom of this program"
+    >
+      Grounded in{' '}
+      <span className="font-semibold text-primary">
+        {global} specialized{org > 0 ? ` + ${org} your docs` : ''}
+      </span>
+    </button>
   )
 }
