@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import TopNav from '../components/TopNav'
-import AgentCard from '../components/AgentCard'
+import PipelineView from '../components/PipelineView'
 import FloatingParticles from '../components/FloatingParticles'
 import { useAgentStream } from '../hooks/useAgentStream'
 
@@ -84,11 +84,7 @@ export default function AgentStatusPage() {
           </div>
         </div>
 
-        <div className="grid gap-4">
-          {agents.map((agent, i) => (
-            <AgentCard key={agent.id} agent={agent} index={i} />
-          ))}
-        </div>
+        <PipelineView agents={agents} />
 
         <div className="mt-8 flex justify-end">
           <button

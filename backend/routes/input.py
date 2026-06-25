@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
     """Request body for chat endpoint — full transcript + optional Excel summary."""
     chat_messages: list[ChatMessage]
     excel_preview: ExcelPreview | None = None
+    captured_fields: list[str] = []
 
 
 class ChatResponse(BaseModel):
@@ -89,7 +90,11 @@ async def process_chat(request: ChatRequest) -> ChatResponse:
     excel_preview = (
         request.excel_preview.model_dump() if request.excel_preview else None
     )
-    result = await run_chat_assistant(request.chat_messages, excel_preview)
+    result = await run_chat_assistant(
+        request.chat_messages,
+        excel_preview,
+        previously_captured=request.captured_fields,
+    )
 
     captured = result["captured_fields"]
     missing_required = [f for f in REQUIRED_FIELDS if f not in captured]

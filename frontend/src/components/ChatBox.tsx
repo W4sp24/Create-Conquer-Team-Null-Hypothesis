@@ -1,4 +1,4 @@
-import { useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
 import { Paperclip, ArrowUp, Sprout, ArrowRight } from 'lucide-react'
 import type { ChatMessage, ChipState, UploadPreview } from '../types'
 import { looksLikeTable } from '../lib/mock'
@@ -45,6 +45,11 @@ export default function ChatBox({
   const [text, setText] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -80,7 +85,7 @@ export default function ChatBox({
 
   return (
     <div
-      className="relative flex h-full min-h-[420px] flex-col"
+      className="relative flex h-full flex-col"
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
@@ -91,10 +96,11 @@ export default function ChatBox({
       onDrop={handleDrop}
     >
       {/* Message thread */}
-      <div className="flex-1 space-y-5 overflow-y-auto pr-1 smooth-scroll">
+      <div className="flex-1 min-h-0 space-y-5 overflow-y-auto pr-1 smooth-scroll">
         {messages.map((m, i) => (
           <Message key={i} message={m} index={i} />
         ))}
+        <div ref={bottomRef} />
       </div>
 
       {/* Composer */}

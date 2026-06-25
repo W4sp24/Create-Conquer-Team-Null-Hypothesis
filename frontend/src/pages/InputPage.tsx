@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Sprout, FolderOpen, MessagesSquare, ListChecks } from 'lucide-react'
+import { Sprout, FolderOpen, MessagesSquare, ListChecks, RotateCcw } from 'lucide-react'
 import type {
   ChatMessage,
   ChipState,
@@ -17,10 +17,30 @@ import ContextStatus from '../components/ContextStatus'
 import Spark from '../components/Spark'
 import FloatingParticles from '../components/FloatingParticles'
 
+const STORAGE_KEY = 'anikonsulta:chat-state'
+
 const INITIAL_MESSAGE: ChatMessage = {
   role: 'system',
   content:
-    'Upload your field data as a spreadsheet, or describe the program you need. I’ll ask for whatever context is missing.',
+    "Upload your field data as a spreadsheet, or describe the program you need. I\u2019ll ask for whatever context is missing.",
+}
+
+interface PersistedChatState {
+  messages: ChatMessage[]
+  captured: string[]
+  fieldValues: Record<string, string>
+  missingRequired: string[]
+  ready: boolean
+}
+
+function loadPersistedChat(): PersistedChatState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as PersistedChatState
+  } catch {
+    return null
+  }
 }
 
 const FIELD_CONFIG: { key: ContextFieldKey; label: string; required: boolean }[] = [
@@ -42,22 +62,52 @@ export default function InputPage() {
   const location = useLocation()
   const navState = location.state as ReviewNavState | null
 
-  const [messages, setMessages] = useState<ChatMessage[]>(navState?.messages ?? [INITIAL_MESSAGE])
+  // Seed state from navState (back-navigation) → then persisted localStorage → then defaults
+  const persisted = navState ? null : loadPersistedChat()
+
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    navState?.messages ?? persisted?.messages ?? [INITIAL_MESSAGE],
+  )
   const [preview, setPreview] = useState<UploadPreview | null>(navState?.preview ?? null)
   const [attachment, setAttachment] = useState<Attachment | null>(
     navState?.preview ? { state: 'parsed', preview: navState.preview } : null,
   )
-  const [captured, setCaptured] = useState<string[]>(navState?.captured ?? [])
+  const [captured, setCaptured] = useState<string[]>(
+    navState?.captured ?? persisted?.captured ?? [],
+  )
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(
-    navState?.fieldValues ?? {},
+    navState?.fieldValues ?? persisted?.fieldValues ?? {},
   )
   const [missingRequired, setMissingRequired] = useState<string[]>(
-    navState?.missingRequired ?? ['region', 'crop', 'beneficiaries'],
+    navState?.missingRequired ?? persisted?.missingRequired ?? ['region', 'crop', 'beneficiaries'],
   )
-  const [ready, setReady] = useState(navState?.ready ?? false)
+  const [ready, setReady] = useState(navState?.ready ?? persisted?.ready ?? false)
   const [showExplainer, setShowExplainer] = useState(
     () => localStorage.getItem('anikonsulta:seen-explainer') !== '1',
   )
+
+  // Persist chat state to localStorage whenever it changes.
+  // Skip the very first render to avoid overwriting persisted state with defaults.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    const state: PersistedChatState = { messages, captured, fieldValues, missingRequired, ready }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }, [messages, captured, fieldValues, missingRequired, ready])
+
+  function handleReset() {
+    localStorage.removeItem(STORAGE_KEY)
+    setMessages([INITIAL_MESSAGE])
+    setPreview(null)
+    setAttachment(null)
+    setCaptured([])
+    setFieldValues({})
+    setMissingRequired(['region', 'crop', 'beneficiaries'])
+    setReady(false)
+  }
 
   function dismissExplainer() {
     localStorage.setItem('anikonsulta:seen-explainer', '1')
@@ -78,7 +128,7 @@ export default function InputPage() {
 
   /** Send one chat turn and fold the assistant's reply + state into the UI. */
   async function runChatTurn(history: ChatMessage[], current: UploadPreview | null) {
-    const res = await sendChat(history, current)
+    const res = await sendChat(history, current, captured)
     setMessages((prev) => [...prev, { role: 'system', content: res.reply }])
     setCaptured(res.captured_fields)
     setFieldValues(res.field_values)
@@ -175,11 +225,12 @@ export default function InputPage() {
       <main className="relative z-10 mx-auto w-full max-w-[1400px] flex-1 px-4 py-10 sm:px-6">
         {showExplainer && <ExplainerBanner onDismiss={dismissExplainer} />}
         {/* Desktop: 3-column workspace of rich cards */}
-        <div className="hidden gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px]">
+        <div className="hidden h-[680px] gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px]">
           <PanelCard
             icon={<FolderOpen size={16} strokeWidth={1.6} />}
             label="Sources"
             className="animate-rise delay-2"
+            bodyClassName="overflow-y-auto"
           >
             <OrgSourceList />
           </PanelCard>
@@ -187,8 +238,21 @@ export default function InputPage() {
           <PanelCard
             icon={<MessagesSquare size={16} strokeWidth={1.6} />}
             label="Chat"
-            className="animate-rise delay-3 min-h-[560px]"
+            className="animate-rise delay-3"
             bodyClassName="flex-1"
+            headerAction={
+              messages.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  title="Reset conversation"
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-secondary transition-all duration-200 hover:bg-cream hover:text-primary"
+                >
+                  <RotateCcw size={13} strokeWidth={1.8} />
+                  Reset
+                </button>
+              ) : null
+            }
           >
             {chat}
           </PanelCard>
@@ -197,6 +261,7 @@ export default function InputPage() {
             icon={<ListChecks size={16} strokeWidth={1.6} />}
             label="Context Status"
             className="animate-rise delay-4"
+            bodyClassName="overflow-y-auto"
           >
             {context}
           </PanelCard>
@@ -207,8 +272,21 @@ export default function InputPage() {
           <PanelCard
             icon={<MessagesSquare size={16} strokeWidth={1.6} />}
             label="Chat"
-            className="min-h-[480px]"
+            className="min-h-[480px] max-h-[680px]"
             bodyClassName="flex-1"
+            headerAction={
+              messages.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  title="Reset conversation"
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-secondary transition-all duration-200 hover:bg-cream hover:text-primary"
+                >
+                  <RotateCcw size={13} strokeWidth={1.8} />
+                  Reset
+                </button>
+              ) : null
+            }
           >
             {chat}
           </PanelCard>
@@ -313,12 +391,14 @@ function PanelCard({
   children,
   className = '',
   bodyClassName = '',
+  headerAction,
 }: {
   icon: React.ReactNode
   label: string
   children: React.ReactNode
   className?: string
   bodyClassName?: string
+  headerAction?: React.ReactNode
 }) {
   return (
     <section className={`card-surface group flex flex-col overflow-hidden transition-all duration-500 hover:shadow-card-hover ${className}`}>
@@ -329,9 +409,12 @@ function PanelCard({
         <span className="text-label font-semibold uppercase tracking-label text-forest transition-colors duration-300 group-hover:text-forest-deep">
           {label}
         </span>
-        <Spark size={10} className="ml-auto text-leaf opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:animate-sparkle" />
+        {headerAction
+          ? <div className="ml-auto">{headerAction}</div>
+          : <Spark size={10} className="ml-auto text-leaf opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:animate-sparkle" />
+        }
       </div>
-      <div className={`flex flex-col p-5 ${bodyClassName}`}>{children}</div>
+      <div className={`flex flex-1 flex-col overflow-hidden p-5 ${bodyClassName}`}>{children}</div>
     </section>
   )
 }
