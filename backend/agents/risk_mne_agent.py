@@ -25,23 +25,31 @@ async def run_risk_mne_agent(
         # Build evidence summary
         evidence_summary = _summarize_evidence(retrieved)
         
-        # Build chat summary
-        chat_summary = "\n".join(
-            f"{msg.role}: {msg.content}" for msg in context.chat_messages
-        )
+        # Last 10 messages contain all the context and stated targets we need
+        recent = context.chat_messages[-10:]
+        chat_summary = "\n".join(f"{msg.role}: {msg.content}" for msg in recent)
         
         # System prompt
         system_prompt = """You are a risk assessment and M&E specialist for agricultural livelihood programs.
 
+Read the full conversation transcript carefully — users often mention specific risks \
+(road access, typhoon season, political instability, low literacy, unreliable markets, \
+conflict between community factions) without framing them as "risks". Extract these \
+and turn them into concrete risk flags and targeted mitigations.
+
+KPIs must be grounded in what the user actually wants to achieve, not generic \
+agricultural metrics. If the user mentioned a specific income target, yield goal, \
+market volume, or reach number — use those exact figures in the KPI targets.
+
 Return ONLY valid JSON matching this schema:
 {
   "risk_level": "low" | "medium" | "high",
-  "risk_flags": ["specific risks identified"],
-  "mitigations": ["concrete mitigation strategies"],
+  "risk_flags": ["specific risks identified from the conversation and evidence"],
+  "mitigations": ["concrete mitigation strategies tied to each flag"],
   "kpis": [
     {
       "name": "string",
-      "target": "string with number and unit",
+      "target": "string with number and unit drawn from what the user stated",
       "measurement": "how to measure this"
     }
   ],
@@ -50,9 +58,9 @@ Return ONLY valid JSON matching this schema:
 
 Rules:
 - risk_level must be exactly "low", "medium", or "high"
-- risk_flags should identify specific, actionable risks (weather, infrastructure, capacity)
+- risk_flags must be specific — cite what the user said or what the data shows
 - mitigations must be concrete actions, not vague statements
-- Define 3-5 KPIs that are SMART (Specific, Measurable, Achievable, Relevant, Time-bound)
+- Define 3-5 KPIs that are SMART and grounded in the conversation
 - confidence_score reflects data quality (0.0 = no data, 1.0 = comprehensive data)"""
 
         # User prompt
@@ -60,10 +68,11 @@ Rules:
         user_prompt = f"""{goal_line}Evidence from knowledge base:
 {evidence_summary}
 
-Organization context:
+Conversation transcript (extract risks, targets, and constraints the user mentioned — \
+they may not use the word "risk" but describe real hazards):
 {chat_summary}
 
-Assess risks and define KPIs appropriate for this program type as JSON."""
+Assess risks and define KPIs grounded in the above. Return as JSON."""
 
         # Call LLM
         raw_response = await call_llm(

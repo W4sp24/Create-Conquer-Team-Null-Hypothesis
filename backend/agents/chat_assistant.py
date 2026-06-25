@@ -113,7 +113,9 @@ def _compute_richness(captured: list[str], excel_preview: dict | None) -> int:
         score += 5
     return min(score, 100)
 
-SYSTEM_PROMPT = """You are the intake assistant for AniKonsulta, a tool that designs \
+_SYSTEM_PROMPT_TEMPLATE = """{{CAPTURED_HEADER}}
+
+You are the intake assistant for AniKonsulta, a tool that designs \
 context-adapted social programs for smallholder agriculture and livelihood NGOs.
 
 Your job is to gather context needed to generate a program while being genuinely helpful.
@@ -147,31 +149,51 @@ Report the total or average as appropriate.
 - STAFF: find any column indicating staff count or roles.
 - BENEFICIARIES: row count is always the beneficiary count (each row = one \
 farmer/household). This is already pre-captured — do not ask about it.
+- GOAL: ██ NEVER infer 'goal' from spreadsheet data. ██ Spreadsheets contain field \
+survey measurements — they describe WHO is being surveyed and WHAT they grow, not WHAT \
+PROGRAM TYPE the organization wants. 'goal' must be explicitly stated by the user in \
+the conversation. A column named "training_type" or "activity" is NOT a program goal.
 
 If a field is clearly present in the data, capture it immediately. Only ask about fields \
 that are genuinely absent from the spreadsheet AND the conversation.
 ═══════════════════════════════════════════════════════════════════════════
 
 STRICT RULES:
-1. [ALREADY CAPTURED] is permanent. Never ask about those fields again.
-2. Extract from ALL sources — spreadsheet columns, sample values, statistics, and chat.
-3. captured_fields must always include everything from [ALREADY CAPTURED] plus new finds. \
+1. ██ ALREADY CAPTURED fields listed at the top of this prompt are FINAL. NEVER ask about \
+them again — not even for clarification. Treat them as confirmed ground truth.
+2. Extract from ALL sources — spreadsheet columns, sample values, statistics, and chat. \
+Exception: 'goal' ONLY from chat — never from spreadsheet data.
+3. captured_fields must always include everything from ALREADY CAPTURED plus new finds. \
 Never shrink the list.
-4. Ask for exactly ONE missing field per reply. Priority: required fields first (region → \
-crop → beneficiaries), then optional (budget → staff). Never stack questions.
-5. Set "ready": true only after all three REQUIRED fields are captured AND you have asked \
-about budget and staff at least once (even if the user skips them). If the user says \
-"skip", "no budget", or equivalent, accept that and move on.
-6. Never invent data. If a value is ambiguous, describe what you see and ask to confirm.
-7. Be conversational — acknowledge what you found in the data before asking the next \
-question. e.g. "I can see from your spreadsheet that you have 5,000 rice farmers in \
-Northern Luzon. What budget do you have available for this program?"
+4. Ask for exactly ONE missing field per reply. Priority: goal → region → crop → \
+beneficiaries → budget → staff. Once all required fields are captured, switch to \
+open-ended enrichment questions (see Rule 6). Never stack questions. \
+Questions MUST be phrased as actual questions ending with '?' — never state \
+"I'd like to confirm X" or "I need to know X"; ask directly: "What is X?"
+5. Set "ready": true only after all four REQUIRED fields (goal, region, crop, \
+beneficiaries) are captured AND you have asked about budget and staff at least once \
+(even if the user skips them). If the user says "skip", "no budget", or equivalent, \
+accept that and move on.
+6. ██ WHEN ALL REQUIRED FIELDS ARE ALREADY CAPTURED: set "ready": true AND write a reply \
+that does THREE things: (a) briefly confirm the core context — "You're designing a \
+[goal] for [count] [crop] farmers in [region].", (b) tell the user the Generate \
+button is now available, (c) invite one open-ended follow-up — "Anything else I \
+should factor in — specific challenges, local constraints, or existing programs in \
+the area?" Do NOT re-ask captured fields. Treat this as the start of enrichment, \
+not the end of the conversation.
+7. Never invent data. If a value is ambiguous, describe what you see and ask to confirm.
+8. Be conversational — acknowledge what you found in the data before asking the next \
+question.
+9. AFTER "ready": true — when the user shares additional information, acknowledge it \
+specifically: "I've noted that [X] — this will shape the program design." Then invite \
+more or confirm they can generate. Never re-ask captured fields. Keep "ready": true \
+in every subsequent response.
 
 Return ONLY valid JSON:
 {
   "reply": "your conversational message to the user",
-  "captured_fields": ["region", "crop", ...],
-  "field_values": {"region": "short plain-language value", ...},
+  "captured_fields": ["goal", "region", "crop", ...],
+  "field_values": {"goal": "short plain-language value", ...},
   "ready": true or false
 }
 
@@ -180,12 +202,30 @@ captured field — what the data actually shows, not a restatement of the questi
 """
 
 
-def _excel_summary(excel_preview: dict | None) -> str:
-    """Render a compact, data-aware spreadsheet summary for the prompt.
+def _build_system_prompt(captured: list[str]) -> str:
+    """Inject currently-captured fields at the very top of the system prompt.
 
-    Includes per-column statistics (numeric min/mean/max/sum, or example text
-    values) and a few sample rows so the assistant can actually read the data.
+    Placing them in the system prompt (not just the user message) ensures the LLM
+    treats them as authoritative instructions, not background context it can ignore.
     """
+    if captured:
+        header = (
+            "██ ALREADY CAPTURED — DO NOT ASK ABOUT THESE AGAIN: "
+            + ", ".join(captured)
+            + " ██"
+        )
+    else:
+        header = "ALREADY CAPTURED: none yet — start by asking the user for their program goal."
+    return _SYSTEM_PROMPT_TEMPLATE.replace("{{CAPTURED_HEADER}}", header)
+
+
+_MAX_COLS = 8
+_MAX_EXAMPLES = 3
+_MAX_SAMPLE_ROWS = 2
+
+
+def _excel_summary(excel_preview: dict | None) -> str:
+    """Compact spreadsheet summary — enough for the LLM to identify context fields."""
     if not excel_preview:
         return "No spreadsheet uploaded."
 
@@ -195,29 +235,28 @@ def _excel_summary(excel_preview: dict | None) -> str:
     columns = excel_preview.get("columns") or []
     sample_rows = excel_preview.get("sample_rows") or []
 
-    lines = [f"File '{filename}': {rows} rows x {cols} columns."]
+    lines = [f"File '{filename}': {rows} rows x {cols} cols."]
 
+    shown_cols = columns[:_MAX_COLS]
     if columns:
         lines.append("Columns:")
-        for c in columns:
+        for c in shown_cols:
             name = c.get("name", "?")
             if c.get("kind") == "number":
-                lines.append(
-                    f"- {name} (number: mean {c.get('mean')}, min {c.get('min')}, "
-                    f"max {c.get('max')}, sum {c.get('sum')}, n={c.get('count')})"
-                )
+                lines.append(f"- {name} (num: mean={c.get('mean')}, n={c.get('count')})")
             else:
-                examples = ", ".join(str(e) for e in (c.get("examples") or [])[:5])
-                detail = f", e.g. {examples}" if examples else ""
-                lines.append(f"- {name} (text, {c.get('count')} values{detail})")
+                examples = ", ".join(str(e) for e in (c.get("examples") or [])[:_MAX_EXAMPLES])
+                detail = f" e.g. {examples}" if examples else ""
+                lines.append(f"- {name} (text,{detail})")
+        if len(columns) > _MAX_COLS:
+            lines.append(f"  ...and {len(columns) - _MAX_COLS} more columns")
     else:
         headers = excel_preview.get("headers", []) or []
-        headers_str = ", ".join(str(h) for h in headers) if headers else "none detected"
-        lines.append(f"Columns: {headers_str}")
+        lines.append(f"Columns: {', '.join(str(h) for h in headers) or 'none'}")
 
     if sample_rows:
         lines.append("Sample rows:")
-        for r in sample_rows[:5]:
+        for r in sample_rows[:_MAX_SAMPLE_ROWS]:
             lines.append(f"  {r}")
 
     return "\n".join(lines)
@@ -228,45 +267,67 @@ def _build_messages(
     excel_preview: dict | None,
     previously_captured: list[str],
 ) -> list[dict]:
-    """Build a proper multi-turn messages array for the Groq API.
+    """Build the multi-turn messages array for the Groq API.
 
-    - Frontend role "user"   → API role "user"
-    - Frontend role "system" → API role "assistant" (these are the bot's prior replies)
-    - Prepends a [CONTEXT] block to the system prompt so the model sees captured fields
-      before any user turn, then appends spreadsheet + RAG excerpts to the final user turn.
+    No history trimming — conversations are 8–12 turns (well within context
+    limits) and trimming assistant turns breaks Q&A pair coherence, making
+    the LLM appear confused and less engaged. The token savings from trimming
+    a short conversation are negligible compared to the quality harm.
+    Captured fields stay in the system prompt only (not duplicated here).
     """
     messages: list[dict] = []
-
     for m in chat_messages:
         if m.role == "user":
             messages.append({"role": "user", "content": m.content})
         else:
-            # "system" role on the frontend means an assistant reply
             messages.append({"role": "assistant", "content": m.content})
 
-    # Build captured-fields line — placed prominently at the START of the grounding block.
-    if previously_captured:
-        captured_line = (
-            f"[ALREADY CAPTURED — do NOT ask about these again: {', '.join(previously_captured)}]"
-        )
-    else:
-        captured_line = "[ALREADY CAPTURED: none yet]"
+    # Chat APIs require user-first turn order. When the conversation starts with
+    # an assistant message (e.g. the initial upload acknowledgment before the user
+    # has typed anything), insert a minimal synthetic opener. Without this the model
+    # sees an assistant-first array, loses track of conversation state, and
+    # "continues" its previous reply instead of writing a new one — producing duplication.
+    if messages and messages[0]["role"] == "assistant":
+        messages.insert(0, {"role": "user", "content": "[Spreadsheet uploaded — begin intake]"})
 
-    final_turn = (
-        f"{captured_line}\n\n"
-        f"Spreadsheet summary:\n{_excel_summary(excel_preview)}\n\n"
-        "Respond to the latest user message and report which context fields are now captured."
-    )
+    excel_block = f"Spreadsheet summary:\n{_excel_summary(excel_preview)}"
 
-    # If the last message is a user message, augment it with context.
-    # If the conversation is empty or ends with an assistant message, append a new user turn.
     if messages and messages[-1]["role"] == "user":
         messages[-1] = {
             "role": "user",
-            "content": messages[-1]["content"] + f"\n\n---\n{final_turn}",
+            "content": (
+                messages[-1]["content"]
+                + f"\n\n---\n{excel_block}\n\n"
+                "Respond to the user message above. "
+                "Report which context fields are now captured."
+            ),
         }
     else:
-        messages.append({"role": "user", "content": final_turn})
+        # Conversation ends on assistant turn. Tell the model exactly what to produce next
+        # so it doesn't echo its previous reply.
+        next_missing = next(
+            (f for f in REQUIRED_FIELDS if f not in previously_captured), None
+        )
+        if next_missing:
+            ask_instruction = (
+                f"Ask the user for '{next_missing}' — ONE direct question ending with '?'. "
+                "Do NOT restate what you found in the spreadsheet."
+            )
+        else:
+            ask_instruction = (
+                "All required fields are captured. Invite the user to share any additional "
+                "context (challenges, constraints, existing programs)."
+            )
+        messages.append({
+            "role": "user",
+            "content": (
+                f"{excel_block}\n\n"
+                f"[New data is available — write your NEXT reply to the user. "
+                f"{ask_instruction} "
+                "Your reply MUST start with entirely new words — "
+                "do NOT begin with any sentence or phrase from your previous message.]"
+            ),
+        })
 
     return messages
 
@@ -299,7 +360,7 @@ async def run_chat_assistant(
             provider="groq",
             model=GROQ_FAST,
             messages=messages,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=_build_system_prompt(enhanced_captured),
         )
         parsed = extract_json(raw)
         if not isinstance(parsed, dict):
@@ -307,6 +368,13 @@ async def run_chat_assistant(
 
         reply = str(parsed.get("reply") or "").strip()
         llm_captured = [f for f in parsed.get("captured_fields", []) if f in ALL_FIELDS]
+        # 'goal' can only be captured when the user has sent at least one message.
+        # This blocks the LLM from inferring it from spreadsheet columns on upload
+        # (before any conversation has happened). Prior-turn captures (in captured_so_far)
+        # are always kept — they came from a real conversation.
+        user_has_spoken = any(m.role == "user" for m in chat_messages)
+        if "goal" in llm_captured and "goal" not in captured_so_far and not user_has_spoken:
+            llm_captured = [f for f in llm_captured if f != "goal"]
         # Final merge: enhanced_captured (excel + history) union LLM output — only grows.
         captured = list(dict.fromkeys(
             [f for f in ALL_FIELDS if f in (set(enhanced_captured) | set(llm_captured))]
