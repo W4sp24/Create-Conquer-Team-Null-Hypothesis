@@ -51,6 +51,12 @@ export default function AgentStatusPage() {
       <TopNav />
 
       <main className="relative z-10 mx-auto w-full max-w-[920px] flex-1 px-4 py-10 sm:px-6">
+        <p aria-live="polite" className="sr-only">
+          {agents
+            .filter((a) => a.status === 'done' || a.status === 'error')
+            .map((a) => `${a.id.replace(/_/g, ' ')}: ${a.status}`)
+            .join('. ')}
+        </p>
         <div className="mb-8 animate-rise">
           <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-label text-leaf-bright">
             <Sparkles size={12} className="text-gold" />
