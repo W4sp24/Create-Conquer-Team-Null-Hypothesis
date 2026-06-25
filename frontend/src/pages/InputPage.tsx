@@ -295,7 +295,6 @@ function ExplainerBanner({ onDismiss }: { onDismiss: () => void }) {
         type="button"
         onClick={onDismiss}
         className="shrink-0 rounded-full px-2 py-1 text-[12px] text-secondary transition-colors hover:bg-cream hover:text-primary"
-        aria-label="Dismiss explainer"
       >
         Got it
       </button>
