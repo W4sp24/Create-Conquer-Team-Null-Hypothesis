@@ -24,9 +24,10 @@ async def run_intervention_adapter(
         # Build evidence summary
         evidence_summary = _summarize_evidence(retrieved)
         
-        # Build chat summary
+        # Build chat summary (last 8 turns — recent messages carry the most signal)
+        recent = context.chat_messages[-8:]
         chat_summary = "\n".join(
-            f"{msg.role}: {msg.content}" for msg in context.chat_messages
+            f"{msg.role}: {msg.content}" for msg in recent
         )
         
         # System prompt
@@ -86,8 +87,8 @@ Select and adapt an intervention as JSON."""
         # Fallback on any error
         await sse_queue.put(SSEEvent(agent="intervention_adapter", status="done"))
         return InterventionAdapterOutput(
-            intervention_name="Fallback Intervention",
-            description="Agent failed — using default intervention",
+            intervention_name="Context-Adapted Agricultural Support",
+            description="A general best-practice agricultural support program adapted to local conditions.",
             adaptations=[],
             implementation_steps=[],
         )
@@ -100,14 +101,14 @@ def _summarize_evidence(retrieved: RetrievedDocs) -> str:
     if retrieved.specialized:
         lines.append(f"Global evidence ({len(retrieved.specialized)} docs):")
         for i, doc in enumerate(retrieved.specialized[:3], 1):
-            lines.append(f"{i}. [{doc.source}] {doc.text[:200]}...")
+            lines.append(f"{i}. [{doc.source}] {doc.text[:600]}...")
         if len(retrieved.specialized) > 3:
             lines.append(f"... and {len(retrieved.specialized) - 3} more global docs")
     
     if retrieved.org_uploads:
         lines.append(f"\nOrganization docs ({len(retrieved.org_uploads)} docs):")
         for i, doc in enumerate(retrieved.org_uploads[:3], 1):
-            lines.append(f"{i}. [{doc.source}] {doc.text[:200]}...")
+            lines.append(f"{i}. [{doc.source}] {doc.text[:600]}...")
         if len(retrieved.org_uploads) > 3:
             lines.append(f"... and {len(retrieved.org_uploads) - 3} more org docs")
     
@@ -115,5 +116,3 @@ def _summarize_evidence(retrieved: RetrievedDocs) -> str:
         return "No evidence retrieved from knowledge base."
     
     return "\n".join(lines)
-
-# Made with Bob

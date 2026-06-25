@@ -51,4 +51,3 @@ def parse_excel(file_content: bytes) -> List[ExcelRow]:
     except Exception as e:
         raise ValueError(f"Failed to parse Excel file: {str(e)}")
 
-# Made with Bob

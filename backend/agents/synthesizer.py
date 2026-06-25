@@ -242,5 +242,3 @@ def _build_citations(retrieved: RetrievedDocs) -> list[str]:
         citations = ["[No sources retrieved — upload docs via POST /sources/upload]"]
     
     return citations
-
-# Made with Bob

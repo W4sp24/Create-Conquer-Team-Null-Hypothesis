@@ -44,6 +44,9 @@ export default function ProgramOutput({ program }: { program: Program }) {
           {program.per_beneficiary_cost_usd != null && (
             <Stat label="Cost / beneficiary" value={`$${program.per_beneficiary_cost_usd}`} />
           )}
+          {program.total_budget_estimate && (
+            <Stat label="Total budget" value={program.total_budget_estimate} />
+          )}
           <GroundingBadge citations={program.citations} />
         </div>
       </div>

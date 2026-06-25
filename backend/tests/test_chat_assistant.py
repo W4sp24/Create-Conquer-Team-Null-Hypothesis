@@ -14,7 +14,7 @@ async def test_run_chat_assistant_returns_field_values():
         "field_values": {"region": "Coastal Cebu, typhoon-prone"},
         "ready": false
     }"""
-    with patch("agents.chat_assistant.call_llm", new_callable=AsyncMock) as mock_llm:
+    with patch("agents.chat_assistant.call_llm_chat", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = mock_response
 
         result = await run_chat_assistant(
@@ -33,7 +33,7 @@ async def test_run_chat_assistant_drops_values_for_uncaptured_fields():
         "field_values": {"region": "Coastal Cebu", "crop": "should be dropped"},
         "ready": false
     }"""
-    with patch("agents.chat_assistant.call_llm", new_callable=AsyncMock) as mock_llm:
+    with patch("agents.chat_assistant.call_llm_chat", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = mock_response
 
         result = await run_chat_assistant(
@@ -47,7 +47,7 @@ async def test_run_chat_assistant_drops_values_for_uncaptured_fields():
 @pytest.mark.asyncio
 async def test_run_chat_assistant_field_values_empty_on_llm_failure():
     """On any LLM/parse failure, field_values falls back to an empty dict."""
-    with patch("agents.chat_assistant.call_llm", new_callable=AsyncMock) as mock_llm:
+    with patch("agents.chat_assistant.call_llm_chat", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = Exception("LLM error")
 
         result = await run_chat_assistant(

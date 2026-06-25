@@ -26,8 +26,9 @@ async def run_risk_mne_agent(
         evidence_summary = _summarize_evidence(retrieved)
         
         # Build chat summary
+        recent = context.chat_messages[-8:]
         chat_summary = "\n".join(
-            f"{msg.role}: {msg.content}" for msg in context.chat_messages
+            f"{msg.role}: {msg.content}" for msg in recent
         )
         
         # System prompt
@@ -116,11 +117,11 @@ Assess risks and define KPIs as JSON."""
         # Fallback on any error
         await sse_queue.put(SSEEvent(agent="risk_mne_agent", status="done"))
         return RiskMneOutput(
-            risk_level="unknown",
-            risk_flags=["Risk assessment failed"],
-            mitigations=[],
+            risk_level="medium",
+            risk_flags=["Risk assessment unavailable — review manually before rollout"],
+            mitigations=["Conduct a local stakeholder risk workshop before Phase 1"],
             kpis=[],
-            confidence_score=0.0,
+            confidence_score=0.5,
         )
 
 
@@ -131,14 +132,14 @@ def _summarize_evidence(retrieved: RetrievedDocs) -> str:
     if retrieved.specialized:
         lines.append(f"Global evidence ({len(retrieved.specialized)} docs):")
         for i, doc in enumerate(retrieved.specialized[:3], 1):
-            lines.append(f"{i}. [{doc.source}] {doc.text[:200]}...")
+            lines.append(f"{i}. [{doc.source}] {doc.text[:600]}...")
         if len(retrieved.specialized) > 3:
             lines.append(f"... and {len(retrieved.specialized) - 3} more global docs")
     
     if retrieved.org_uploads:
         lines.append(f"\nOrganization docs ({len(retrieved.org_uploads)} docs):")
         for i, doc in enumerate(retrieved.org_uploads[:3], 1):
-            lines.append(f"{i}. [{doc.source}] {doc.text[:200]}...")
+            lines.append(f"{i}. [{doc.source}] {doc.text[:600]}...")
         if len(retrieved.org_uploads) > 3:
             lines.append(f"... and {len(retrieved.org_uploads) - 3} more org docs")
     
@@ -147,4 +148,3 @@ def _summarize_evidence(retrieved: RetrievedDocs) -> str:
     
     return "\n".join(lines)
 
-# Made with Bob

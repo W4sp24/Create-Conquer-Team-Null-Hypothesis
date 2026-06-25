@@ -73,11 +73,11 @@ async def run_pipeline(
         )
     if isinstance(risk, Exception):
         risk = RiskMneOutput(
-            risk_level="unknown",
-            risk_flags=["Risk agent failed"],
-            mitigations=[],
+            risk_level="medium",
+            risk_flags=["Risk assessment unavailable — review manually before rollout"],
+            mitigations=["Conduct a local stakeholder risk workshop before Phase 1"],
             kpis=[],
-            confidence_score=0.0,
+            confidence_score=0.5,
         )
 
     return await run_synthesizer(

@@ -100,5 +100,3 @@ def _summarize_excel(rows: list) -> str:
         lines.append(f"... and {len(rows) - 5} more rows")
     
     return "\n".join(lines)
-
-# Made with Bob

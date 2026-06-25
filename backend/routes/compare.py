@@ -102,4 +102,3 @@ async def compare_profiles(request: CompareRequest) -> dict:
         "profile_b": program_b,
     }
 
-# Made with Bob

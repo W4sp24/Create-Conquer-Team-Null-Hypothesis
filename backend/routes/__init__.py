@@ -6,4 +6,3 @@ from . import run, input, sources, compare
 
 __all__ = ["run", "input", "sources", "compare"]
 
-# Made with Bob

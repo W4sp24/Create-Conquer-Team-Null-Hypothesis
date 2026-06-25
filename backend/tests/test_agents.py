@@ -161,7 +161,7 @@ async def test_intervention_adapter_fallback(sample_context, sample_retrieved, s
         result = await run_intervention_adapter(sample_context, sample_retrieved, sse_queue)
         
         assert isinstance(result, InterventionAdapterOutput)
-        assert result.intervention_name == "Fallback Intervention"
+        assert result.intervention_name == "Context-Adapted Agricultural Support"
 
 
 # ── Risk & M&E Agent Tests ─────────────────────────────────────────────────────
@@ -227,8 +227,8 @@ async def test_risk_mne_fallback(sample_context, sample_retrieved, sse_queue):
         result = await run_risk_mne_agent(sample_context, sample_retrieved, sse_queue)
         
         assert isinstance(result, RiskMneOutput)
-        assert result.risk_level == "unknown"
-        assert result.confidence_score == 0.0
+        assert result.risk_level == "medium"
+        assert result.confidence_score == 0.5
 
 
 # ── Synthesizer Tests ──────────────────────────────────────────────────────────
@@ -320,4 +320,3 @@ async def test_synthesizer_fallback(sample_retrieved, sse_queue):
         assert len(result.rollout_phases) >= 2  # Fallback phases
         assert len(result.staff_roles) >= 1
 
-# Made with Bob
