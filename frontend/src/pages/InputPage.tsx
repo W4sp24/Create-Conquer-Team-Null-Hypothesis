@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sprout, FolderOpen, MessagesSquare, ListChecks } from 'lucide-react'
 import type {
   ChatMessage,
   ChipState,
   ContextField,
   ContextFieldKey,
-  ContextPayload,
+  ReviewNavState,
   UploadPreview,
 } from '../types'
-import { sendChat, startRun, uploadExcel } from '../lib/api'
+import { sendChat, uploadExcel } from '../lib/api'
 import { parsePastedTable } from '../lib/mock'
 import OrgSourceList from '../components/OrgSourceList'
 import ChatBox from '../components/ChatBox'
@@ -39,12 +39,22 @@ interface Attachment {
 
 export default function InputPage() {
   const navigate = useNavigate()
-  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
-  const [preview, setPreview] = useState<UploadPreview | null>(null)
-  const [attachment, setAttachment] = useState<Attachment | null>(null)
-  const [captured, setCaptured] = useState<string[]>([])
-  const [ready, setReady] = useState(false)
-  const [running, setRunning] = useState(false)
+  const location = useLocation()
+  const navState = location.state as ReviewNavState | null
+
+  const [messages, setMessages] = useState<ChatMessage[]>(navState?.messages ?? [INITIAL_MESSAGE])
+  const [preview, setPreview] = useState<UploadPreview | null>(navState?.preview ?? null)
+  const [attachment, setAttachment] = useState<Attachment | null>(
+    navState?.preview ? { state: 'parsed', preview: navState.preview } : null,
+  )
+  const [captured, setCaptured] = useState<string[]>(navState?.captured ?? [])
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>(
+    navState?.fieldValues ?? {},
+  )
+  const [missingRequired, setMissingRequired] = useState<string[]>(
+    navState?.missingRequired ?? ['region', 'crop', 'beneficiaries'],
+  )
+  const [ready, setReady] = useState(navState?.ready ?? false)
   const [showExplainer, setShowExplainer] = useState(
     () => localStorage.getItem('anikonsulta:seen-explainer') !== '1',
   )
@@ -61,9 +71,9 @@ export default function InputPage() {
         label: cfg.label,
         required: cfg.required,
         captured: captured.includes(cfg.key),
-        detail: captured.includes(cfg.key) ? 'captured' : undefined,
+        detail: fieldValues[cfg.key],
       })),
-    [captured],
+    [captured, fieldValues],
   )
 
   /** Send one chat turn and fold the assistant's reply + state into the UI. */
@@ -71,6 +81,8 @@ export default function InputPage() {
     const res = await sendChat(history, current)
     setMessages((prev) => [...prev, { role: 'system', content: res.reply }])
     setCaptured(res.captured_fields)
+    setFieldValues(res.field_values)
+    setMissingRequired(res.missing_required)
     setReady(res.ready)
   }
 
@@ -124,45 +136,36 @@ export default function InputPage() {
     await runChatTurn(next, preview)
   }
 
-  const canGenerate = ready || preview !== null
-
-  async function handleGenerate() {
-    if (!canGenerate || running) return
-    setRunning(true)
-    const payload: ContextPayload = {
-      run_id: crypto.randomUUID(),
-      excel_data: preview?.excelData ?? [],
-      chat_messages: messages,
+  function goToReview() {
+    if (!ready) return
+    const reviewState: ReviewNavState = {
+      messages,
+      preview,
+      captured,
+      fieldValues,
+      missingRequired,
+      ready,
     }
-    const id = await startRun(payload)
-    if (id) {
-      navigate(`/status?run=${encodeURIComponent(id)}`)
-    } else {
-      setRunning(false)
-      setMessages((prev) => [
-        ...prev,
-        { role: 'system', content: "I couldn't start the run — make sure the backend is running." },
-      ])
-    }
+    navigate('/review', { state: reviewState })
   }
 
   const chat = (
     <ChatBox
       messages={messages}
       attachment={attachment}
-      canGenerate={canGenerate}
-      running={running}
+      ready={ready}
+      missingRequired={missingRequired}
       onSend={handleSend}
       onFile={handleFile}
       onPasteTable={handlePasteTable}
-      onGenerate={handleGenerate}
+      onGenerate={goToReview}
       onRemoveAttachment={() => {
         setAttachment(null)
         setPreview(null)
       }}
     />
   )
-  const context = <ContextStatus fields={fields} />
+  const context = <ContextStatus fields={fields} onReview={goToReview} />
 
   return (
     <div className="flex min-h-screen flex-col">

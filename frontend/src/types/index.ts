@@ -94,6 +94,7 @@ export interface CompareResponse {
 export interface ChatTurnResponse {
   reply: string
   captured_fields: string[]
+  field_values: Record<string, string>
   ready: boolean
   missing_required: string[]
 }
@@ -128,4 +129,14 @@ export interface ContextField {
   detail?: string
   /** Whether this field is required before a run can start. */
   required: boolean
+}
+
+/** Carried via React Router navigation `state` between `/` and `/review` — keeps chat history and captured context alive across that round trip without a global store. */
+export interface ReviewNavState {
+  messages: ChatMessage[]
+  preview: UploadPreview | null
+  captured: string[]
+  fieldValues: Record<string, string>
+  missingRequired: string[]
+  ready: boolean
 }

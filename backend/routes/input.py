@@ -39,6 +39,7 @@ class ChatResponse(BaseModel):
     """Conversational reply plus captured-context state for the UI."""
     reply: str
     captured_fields: list[str]
+    field_values: dict[str, str] = {}
     ready: bool
     missing_required: list[str]
 
@@ -96,6 +97,7 @@ async def process_chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(
         reply=result["reply"],
         captured_fields=captured,
+        field_values=result.get("field_values", {}),
         ready=result["ready"],
         missing_required=missing_required,
     )

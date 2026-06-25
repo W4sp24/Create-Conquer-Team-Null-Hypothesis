@@ -102,6 +102,11 @@ export default {
           '0%, 100%': { opacity: '0', transform: 'scale(0) rotate(0deg)' },
           '50%': { opacity: '1', transform: 'scale(1) rotate(180deg)' },
         },
+        stamp: {
+          '0%': { opacity: '0', transform: 'scale(0.6) rotate(-8deg)' },
+          '60%': { opacity: '1', transform: 'scale(1.08) rotate(2deg)' },
+          '100%': { opacity: '1', transform: 'scale(1) rotate(0deg)' },
+        },
       },
       animation: {
         rise: 'rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
@@ -113,6 +118,7 @@ export default {
         'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
         float: 'float 3s ease-in-out infinite',
         sparkle: 'sparkle 1.5s ease-in-out infinite',
+        stamp: 'stamp 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
       },
       transitionTimingFunction: {
         smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',

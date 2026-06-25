@@ -187,6 +187,25 @@ def test_post_chat_ready_when_required_captured(client):
     assert data["missing_required"] == []
 
 
+def test_post_chat_returns_field_values(client):
+    """POST /chat passes through field_values for captured fields."""
+    fake = {
+        "reply": "What crop is the focus?",
+        "captured_fields": ["region"],
+        "field_values": {"region": "Coastal Cebu, typhoon-prone"},
+        "ready": False,
+    }
+    with patch("routes.input.run_chat_assistant", new=AsyncMock(return_value=fake)):
+        response = client.post(
+            "/chat",
+            json={"chat_messages": [{"role": "user", "content": "We farm in coastal Cebu"}]},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["field_values"] == {"region": "Coastal Cebu, typhoon-prone"}
+
+
 def test_post_chat_requires_chat_messages(client):
     """The new contract requires chat_messages; the old {message} shape is rejected."""
     response = client.post("/chat", json={"message": "hi"})

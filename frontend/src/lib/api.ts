@@ -68,6 +68,7 @@ export async function sendChat(
   return {
     reply: "I couldn't reach the assistant — make sure the backend is running.",
     captured_fields: [],
+    field_values: {},
     ready: false,
     missing_required: ['region', 'crop', 'beneficiaries'],
   }

@@ -47,8 +47,13 @@ Return ONLY valid JSON, no prose outside it:
 {
   "reply": "your conversational message to the user",
   "captured_fields": ["region", "crop", ...],
+  "field_values": {"region": "short plain-language value you understood", ...},
   "ready": true or false
 }
+
+For every field listed in captured_fields, include a short (under 12 words)
+plain-language value for it in field_values -- what you actually understood
+from the conversation or spreadsheet, not a restatement of the question.
 """
 
 
@@ -128,6 +133,12 @@ Respond to the latest user message and report which context fields are captured.
 
         reply = str(parsed.get("reply") or "").strip()
         captured = [f for f in parsed.get("captured_fields", []) if f in ALL_FIELDS]
+        raw_values = parsed.get("field_values") or {}
+        field_values = {
+            f: str(raw_values[f]).strip()
+            for f in captured
+            if f in raw_values and str(raw_values[f]).strip()
+        }
         # Trust the model's readiness only if it is consistent with required coverage.
         ready = bool(parsed.get("ready")) and all(f in captured for f in REQUIRED_FIELDS)
         if not ready:
@@ -136,12 +147,18 @@ Respond to the latest user message and report which context fields are captured.
         if not reply:
             reply = _fallback_reply(captured)
 
-        return {"reply": reply, "captured_fields": captured, "ready": ready}
+        return {
+            "reply": reply,
+            "captured_fields": captured,
+            "field_values": field_values,
+            "ready": ready,
+        }
 
     except Exception:
         return {
             "reply": _fallback_reply([]),
             "captured_fields": [],
+            "field_values": {},
             "ready": False,
         }
 

@@ -1,16 +1,26 @@
-import { Check, Minus } from 'lucide-react'
-import type { ContextField } from '../types'
+import { Minus } from 'lucide-react'
+import type { ContextField, ContextFieldKey } from '../types'
+import ConfirmationSeal from './ConfirmationSeal'
 
 interface ContextStatusProps {
   fields: ContextField[]
+  onReview: () => void
+}
+
+const WHY_TEXT: Record<ContextFieldKey, string> = {
+  region: 'Shapes the climate and infrastructure assumptions in your program.',
+  crop: 'Determines which interventions are relevant at all.',
+  beneficiaries: 'Sets the scale the program is designed for.',
+  budget: 'Affects how many rollout phases we can recommend.',
+  staff: 'Affects how many rollout phases your team can realistically run.',
 }
 
 /**
- * Right panel — informational only. A flat checklist of which context fields the
- * assistant has captured from the chat + spreadsheet. The run is triggered from
- * inside the chat (the "Generate program" action), not from here.
+ * Right panel — what we've picked up from chat + spreadsheet, in plain
+ * language. Once every required field is captured, this becomes the entry
+ * point into the Review Context screen via the footer button.
  */
-export default function ContextStatus({ fields }: ContextStatusProps) {
+export default function ContextStatus({ fields, onReview }: ContextStatusProps) {
   const missingRequired = fields
     .filter((f) => f.required && !f.captured)
     .map((f) => f.label.toLowerCase())
@@ -18,6 +28,7 @@ export default function ContextStatus({ fields }: ContextStatusProps) {
   const capturedCount = fields.filter((f) => f.captured).length
   const totalCount = fields.length
   const progress = (capturedCount / totalCount) * 100
+  const ready = missingRequired.length === 0
 
   return (
     <div className="flex h-full flex-col">
@@ -52,7 +63,7 @@ export default function ContextStatus({ fields }: ContextStatusProps) {
               }
             >
               {field.captured ? (
-                <Check size={14} strokeWidth={2.2} className="animate-bounce-in" />
+                <ConfirmationSeal size={13} className="animate-bounce-in" />
               ) : (
                 <Minus size={14} strokeWidth={2} />
               )}
@@ -69,26 +80,30 @@ export default function ContextStatus({ fields }: ContextStatusProps) {
                 {field.label}
               </div>
               {field.detail ? (
-                <div className="text-[12px] text-forest transition-all duration-300 group-hover:text-forest-deep">{field.detail}</div>
+                <div className="text-[12px] text-forest transition-all duration-300 group-hover:text-forest-deep">
+                  {field.detail}
+                </div>
               ) : (
-                field.required && (
-                  <div className="text-[12px] text-secondary">required</div>
-                )
+                <div className="text-[12px] text-secondary">{WHY_TEXT[field.key]}</div>
               )}
             </div>
           </li>
         ))}
       </ul>
 
-      {missingRequired.length > 0 ? (
+      {!ready ? (
         <p className="mt-5 rounded-xl border border-hairline bg-canvas/50 px-3 py-2.5 text-center text-[12px] text-secondary animate-fade-in">
           Still needed: {missingRequired.join(', ')}. The assistant will ask in chat.
         </p>
       ) : (
-        <p className="mt-5 flex items-center justify-center gap-1.5 rounded-xl border border-leaf/40 bg-leaf-soft px-3 py-2.5 text-center text-[12px] font-medium text-forest animate-fade-in">
-          <Check size={13} strokeWidth={2.2} />
-          Ready — generate from the chat.
-        </p>
+        <button
+          type="button"
+          onClick={onReview}
+          className="mt-5 flex items-center justify-center gap-1.5 rounded-xl border border-leaf/40 bg-leaf-soft px-3 py-2.5 text-center text-[12px] font-medium text-forest transition-all duration-300 hover:scale-[1.02] hover:bg-leaf/20 animate-stamp motion-reduce:animate-fade-in"
+        >
+          <ConfirmationSeal size={14} />
+          Review & generate
+        </button>
       )}
     </div>
   )
