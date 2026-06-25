@@ -53,29 +53,79 @@ const FIELD_CONFIG: { key: ContextFieldKey; label: string; required: boolean }[]
 ]
 
 const RICHNESS_WEIGHTS: Record<string, number> = { region: 20, crop: 20, beneficiaries: 20, budget: 20, staff: 15 }
-const CROP_KEYWORDS = new Set(['crop', 'commodity', 'activity', 'livelihood', 'product', 'species', 'variety'])
-const REGION_KEYWORDS = new Set(['region', 'province', 'location', 'area', 'district', 'municipality', 'barangay', 'place', 'site', 'zone'])
+
+const CROP_NAME_TOKENS = new Set(['crop', 'commodity', 'activity', 'livelihood', 'product', 'species', 'variety'])
+const REGION_NAME_TOKENS = new Set(['region', 'province', 'location', 'area', 'district', 'municipality', 'barangay', 'place', 'site', 'zone', 'address', 'city', 'town'])
+const BUDGET_NAME_TOKENS = new Set(['budget', 'fund', 'funding', 'cost', 'amount', 'allocation', 'expense'])
+const STAFF_NAME_TOKENS = new Set(['staff', 'worker', 'employee', 'personnel', 'extension', 'agent', 'officer'])
+
+// Known crop values for value-based detection when column name is non-standard
+const CROP_VALUES = new Set([
+  'rice', 'corn', 'maize', 'palay', 'cassava', 'wheat', 'sorghum', 'sugarcane',
+  'coconut', 'banana', 'mango', 'pineapple', 'coffee', 'cacao', 'abaca', 'tobacco',
+  'vegetables', 'vegetable', 'legumes', 'mongo', 'peanut', 'soybean', 'camote',
+  'gabi', 'ube', 'kangkong', 'pechay', 'fishing', 'aquaculture', 'livestock',
+  'poultry', 'cattle', 'swine', 'goat', 'carabao', 'farming', 'agriculture',
+])
+
+function colTokens(header: string): Set<string> {
+  return new Set(header.toLowerCase().split(/[\s_\-/]+/))
+}
+
+function firstVal(header: string, sampleRows: Record<string, unknown>[]): string {
+  return String(sampleRows[0]?.[header] ?? '').trim()
+}
 
 function detectExcelContext(preview: UploadPreview): { fields: string[]; values: Record<string, string> } {
   const fields: string[] = []
   const values: Record<string, string> = {}
 
+  // Row count → beneficiaries (always unambiguous)
   if (preview.rows > 0) {
     fields.push('beneficiaries')
     values['beneficiaries'] = `${preview.rows.toLocaleString()} (from survey rows)`
   }
 
-  for (const header of preview.headers) {
-    const tokens = new Set(header.toLowerCase().split(/[\s_\-]+/))
-    const firstVal = String(preview.sampleRows[0]?.[header] ?? '').trim()
+  // Count non-null values across ALL rows for a given header
+  function fullCount(header: string): number {
+    return preview.excelData.filter(r => {
+      const v = r.data[header]
+      return v !== null && v !== undefined && String(v).trim() !== ''
+    }).length
+  }
 
-    if (!fields.includes('crop') && [...tokens].some(t => CROP_KEYWORDS.has(t)) && firstVal) {
-      fields.push('crop')
-      values['crop'] = firstVal
+  // Pass 1: column name token matching
+  for (const header of preview.headers) {
+    const tokens = colTokens(header)
+    const val = firstVal(header, preview.sampleRows)
+
+    if (!fields.includes('crop') && [...tokens].some(t => CROP_NAME_TOKENS.has(t)) && val) {
+      fields.push('crop'); values['crop'] = val
     }
-    if (!fields.includes('region') && [...tokens].some(t => REGION_KEYWORDS.has(t)) && firstVal) {
-      fields.push('region')
-      values['region'] = firstVal
+    if (!fields.includes('region') && [...tokens].some(t => REGION_NAME_TOKENS.has(t)) && val) {
+      fields.push('region'); values['region'] = val
+    }
+    if (!fields.includes('budget') && [...tokens].some(t => BUDGET_NAME_TOKENS.has(t)) && val) {
+      fields.push('budget'); values['budget'] = val
+    }
+    // Staff: use actual total count across all rows, not just the first sample value
+    if (!fields.includes('staff') && [...tokens].some(t => STAFF_NAME_TOKENS.has(t))) {
+      const count = fullCount(header)
+      if (count > 0) {
+        fields.push('staff')
+        values['staff'] = `${count} (from ${header})`
+      }
+    }
+  }
+
+  // Pass 2: value-based crop detection for non-standard column names
+  if (!fields.includes('crop')) {
+    for (const header of preview.headers) {
+      const val = firstVal(header, preview.sampleRows)
+      if (val && CROP_VALUES.has(val.toLowerCase())) {
+        fields.push('crop'); values['crop'] = val
+        break
+      }
     }
   }
 
@@ -176,12 +226,15 @@ export default function InputPage() {
     current: UploadPreview | null,
     capturedOverride?: string[],
   ) {
+    const REQUIRED = ['region', 'crop', 'beneficiaries']
     const res = await sendChat(history, current, capturedOverride ?? captured)
+    const mergedCaptured = [...new Set([...(capturedOverride ?? captured), ...res.captured_fields])]
     setMessages((prev) => [...prev, { role: 'system', content: res.reply }])
-    setCaptured((prev) => [...new Set([...prev, ...res.captured_fields])])
+    setCaptured(mergedCaptured)
     setFieldValues((prev) => ({ ...prev, ...res.field_values }))
     setMissingRequired(res.missing_required)
-    setReady(res.ready)
+    // Button appears as soon as all 3 required fields are captured — don't wait for optional fields
+    setReady(REQUIRED.every((f) => mergedCaptured.includes(f)))
     setContextRichness(res.context_richness)
   }
 
@@ -197,12 +250,14 @@ export default function InputPage() {
    *  Status panel updates the instant the file is parsed. Returns the merged
    *  captured list so it can be forwarded to the backend as capturedOverride. */
   function applyExcelDetection(result: UploadPreview, currentCaptured: string[]): string[] {
+    const REQUIRED = ['region', 'crop', 'beneficiaries']
     const { fields: autoFields, values: autoValues } = detectExcelContext(result)
     if (autoFields.length === 0) return currentCaptured
     const merged = [...new Set([...currentCaptured, ...autoFields])]
     setCaptured(merged)
     setFieldValues((prev) => ({ ...prev, ...autoValues }))
     setContextRichness(computeRichness(merged, true))
+    setReady(REQUIRED.every((f) => merged.includes(f)))
     return merged
   }
 
@@ -282,14 +337,14 @@ export default function InputPage() {
   const context = <ContextStatus fields={fields} richness={contextRichness} onReview={goToReview} />
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <FloatingParticles />
       <TopNav />
 
-      <main className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-4 py-5 sm:px-6">
+      <main className="relative z-10 mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 flex-col overflow-hidden px-4 py-5 sm:px-6">
         {showExplainer && <ExplainerBanner onDismiss={dismissExplainer} />}
         {/* Desktop: 3-column workspace fills all remaining height after banner */}
-        <div className="hidden min-h-0 flex-1 gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px]">
+        <div className="hidden min-h-0 flex-1 gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px] lg:grid-rows-[1fr]">
           <PanelCard
             icon={<FolderOpen size={16} strokeWidth={1.6} />}
             label="Sources"
@@ -331,8 +386,8 @@ export default function InputPage() {
           </PanelCard>
         </div>
 
-        {/* Tablet / mobile: stacked, chat first */}
-        <div className="flex flex-col gap-4 lg:hidden">
+        {/* Tablet / mobile: stacked, chat first — scrolls within the fixed viewport */}
+        <div className="flex flex-col gap-4 overflow-y-auto pb-4 lg:hidden">
           <PanelCard
             icon={<MessagesSquare size={16} strokeWidth={1.6} />}
             label="Chat"
@@ -478,7 +533,7 @@ function PanelCard({
           : <Spark size={10} className="ml-auto text-leaf opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:animate-sparkle" />
         }
       </div>
-      <div className={`flex flex-1 flex-col overflow-hidden p-4 ${bodyClassName}`}>{children}</div>
+      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden p-4 ${bodyClassName}`}>{children}</div>
     </section>
   )
 }

@@ -85,7 +85,7 @@ export default function ChatBox({
 
   return (
     <div
-      className="relative flex h-full flex-col"
+      className="relative flex flex-1 min-h-0 flex-col"
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
@@ -96,7 +96,7 @@ export default function ChatBox({
       onDrop={handleDrop}
     >
       {/* Message thread */}
-      <div className="flex-1 min-h-0 space-y-5 overflow-y-auto pr-1 smooth-scroll">
+      <div className="flex-1 min-h-0 space-y-5 overflow-y-auto pr-1 scroll-smooth">
         {messages.map((m, i) => (
           <Message key={i} message={m} index={i} />
         ))}
@@ -105,30 +105,25 @@ export default function ChatBox({
 
       {/* Composer */}
       <form onSubmit={handleSubmit} className="mt-4 space-y-2.5">
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={!ready}
-          className={
-            ready
-              ? 'glow-on-hover group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-forest to-forest-deep px-4 py-3 text-[14px] font-semibold text-white shadow-card transition-all duration-300 hover:scale-[1.02] hover:shadow-glow active:scale-95 animate-slide-in-up'
-              : 'flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-hairline bg-leaf-soft px-4 py-3 text-[14px] font-medium text-forest/60'
-          }
-        >
-          {ready ? (
-            <>
-              <Sprout size={16} strokeWidth={1.8} className="text-leaf-bright" />
-              Review your context
-              <ArrowRight
-                size={16}
-                strokeWidth={1.8}
-                className="transition-transform duration-300 group-hover:translate-x-1"
-              />
-            </>
-          ) : (
-            formatMissingMessage(missingRequired)
-          )}
-        </button>
+        {ready ? (
+          <button
+            type="button"
+            onClick={onGenerate}
+            className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-forest px-4 py-3 text-[14px] font-semibold text-white shadow-lg transition-all duration-200 hover:bg-forest-deep hover:scale-[1.02] hover:shadow-xl active:scale-95"
+          >
+            <Sprout size={16} strokeWidth={1.8} className="text-leaf" />
+            Generate program
+            <ArrowRight
+              size={16}
+              strokeWidth={1.8}
+              className="transition-transform duration-200 group-hover:translate-x-1"
+            />
+          </button>
+        ) : (
+          <div className="flex w-full items-center justify-center gap-2 rounded-2xl border border-leaf/40 bg-leaf-soft px-4 py-3 text-[13px] font-medium text-forest">
+            {formatMissingMessage(missingRequired)}
+          </div>
+        )}
 
         {attachment && (
           <div className="animate-slide-in-up">
