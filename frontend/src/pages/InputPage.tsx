@@ -45,6 +45,14 @@ export default function InputPage() {
   const [captured, setCaptured] = useState<string[]>([])
   const [ready, setReady] = useState(false)
   const [running, setRunning] = useState(false)
+  const [showExplainer, setShowExplainer] = useState(
+    () => localStorage.getItem('anikonsulta:seen-explainer') !== '1',
+  )
+
+  function dismissExplainer() {
+    localStorage.setItem('anikonsulta:seen-explainer', '1')
+    setShowExplainer(false)
+  }
 
   const fields: ContextField[] = useMemo(
     () =>
@@ -162,6 +170,7 @@ export default function InputPage() {
       <TopNav />
 
       <main className="relative z-10 mx-auto w-full max-w-[1400px] flex-1 px-4 py-10 sm:px-6">
+        {showExplainer && <ExplainerBanner onDismiss={dismissExplainer} />}
         {/* Desktop: 3-column workspace of rich cards */}
         <div className="hidden gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px]">
           <PanelCard
@@ -265,6 +274,32 @@ function TopNav() {
         </Link>
       </div>
     </header>
+  )
+}
+
+// ── Explainer banner ──────────────────────────────────────────────────────
+
+function ExplainerBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="card-surface mb-5 flex items-start gap-4 rounded-card border border-leaf/30 bg-leaf-soft/40 p-5 animate-rise">
+      <Sprout size={20} strokeWidth={1.7} className="mt-0.5 shrink-0 text-forest" />
+      <div className="flex-1">
+        <h2 className="font-display text-[15px] font-semibold text-primary">How this works</h2>
+        <ol className="mt-2 space-y-1.5 text-[13px] text-secondary">
+          <li>1. Upload your field data (Excel) or describe it in chat.</li>
+          <li>2. A team of specialist agents analyzes it against verified evidence — you'll watch them work, live.</li>
+          <li>3. You get a complete program with every claim traced to a source, plus a list of what was adapted for your context.</li>
+        </ol>
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="shrink-0 rounded-full px-2 py-1 text-[12px] text-secondary transition-colors hover:bg-cream hover:text-primary"
+        aria-label="Dismiss explainer"
+      >
+        Got it
+      </button>
+    </div>
   )
 }
 
