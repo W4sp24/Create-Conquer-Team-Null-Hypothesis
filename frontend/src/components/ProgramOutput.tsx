@@ -9,6 +9,7 @@ import {
   Wand2,
 } from 'lucide-react'
 import type { ProgramOutput as Program } from '../types'
+import RiskBadge from './RiskBadge'
 
 /** Renders a complete generated program. Adaptations Made is emphasized — it is
  *  the core "same need, different context" differentiator. */
@@ -32,7 +33,7 @@ export default function ProgramOutput({ program }: { program: Program }) {
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Stat label="Confidence" value={`${Math.round(program.confidence_level * 100)}%`} />
-          <Stat label="Risk" value={risk.risk_level} />
+          <RiskBadge level={risk.risk_level} />
           {program.per_beneficiary_cost_usd != null && (
             <Stat label="Cost / beneficiary" value={`$${program.per_beneficiary_cost_usd}`} />
           )}
