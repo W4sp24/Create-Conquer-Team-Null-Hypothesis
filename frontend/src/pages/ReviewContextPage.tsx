@@ -81,7 +81,7 @@ export default function ReviewContextPage() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-medium text-primary">{FIELD_LABELS[key]}</div>
                   <div className="text-[13px] text-secondary">
-                    {captured ? value : 'Not provided — program will use general defaults.'}
+                    {captured ? (value ?? 'Captured') : 'Not provided — program will use general defaults.'}
                   </div>
                 </div>
               </li>
