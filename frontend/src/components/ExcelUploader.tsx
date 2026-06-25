@@ -33,8 +33,8 @@ export default function ExcelUploader({
     state === 'parsed'
       ? 'border-leaf/40 bg-leaf-soft'
       : state === 'error'
-        ? 'border-[#D8A24A]/50 bg-[#FBF4E6]'
-        : 'border-hairline bg-canvas/70'
+        ? 'border-amber-400/60 bg-amber-50'
+        : 'border-hairline bg-canvas'
 
   return (
     <div className={`overflow-hidden rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md ${ring}`}>
@@ -51,7 +51,7 @@ export default function ExcelUploader({
           )}
           {state === 'parsed' && <FileSpreadsheet size={17} strokeWidth={1.6} className="animate-bounce-in" />}
           {state === 'error' && (
-            <AlertTriangle size={17} strokeWidth={1.6} className="text-[#C2873A] animate-bounce-in" />
+            <AlertTriangle size={17} strokeWidth={1.6} className="text-amber-600 animate-bounce-in" />
           )}
         </span>
 
@@ -118,7 +118,7 @@ export default function ExcelUploader({
             </thead>
             <tbody>
               {preview.sampleRows.map((row, i) => (
-                <tr key={i} className="odd:bg-canvas/40 transition-colors duration-200 hover:bg-leaf-soft/30 animate-slide-in-up" style={{ animationDelay: `${(i + 1) * 0.05}s` }}>
+                <tr key={i} className="odd:bg-canvas/70 transition-colors duration-200 hover:bg-leaf-soft animate-slide-in-up" style={{ animationDelay: `${(i + 1) * 0.05}s` }}>
                   {preview.headers.map((h) => (
                     <td
                       key={h}

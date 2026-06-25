@@ -23,7 +23,7 @@ const AGENT_META: Record<string, { name: string; role: string; model: string; ic
   risk_mne_agent: {
     name: 'Risk & M&E',
     role: 'Flags risks, mitigations, and defines KPIs',
-    model: 'openai/gpt-oss-20b',
+    model: 'llama-3.3-70b-versatile',
     icon: <ShieldCheck size={15} strokeWidth={1.7} />,
   },
   synthesizer: {
@@ -124,7 +124,7 @@ function NodeIcon({ status }: { status: AgentState['status'] }) {
   if (status === 'done')    return <Check size={18} strokeWidth={2.5} className="text-white" />
   if (status === 'running') return <Loader2 size={18} strokeWidth={2} className="animate-spin text-leaf" />
   if (status === 'error')   return <AlertTriangle size={16} strokeWidth={2} className="text-red-400" />
-  return <Circle size={14} strokeWidth={2} className="text-white/30" />
+  return <Circle size={14} strokeWidth={2} className="text-white/50" />
 }
 
 function nodeCircleClass(status: AgentState['status']): string {
@@ -132,7 +132,7 @@ function nodeCircleClass(status: AgentState['status']): string {
     case 'done':    return 'bg-leaf shadow-glow'
     case 'running': return 'border-2 border-leaf bg-leaf/20 shadow-glow animate-pulse-glow'
     case 'error':   return 'border-2 border-red-400 bg-red-500/20'
-    default:        return 'border-2 border-white/20 bg-white/5'
+    default:        return 'border-2 border-white/40 bg-white/10'
   }
 }
 
@@ -152,7 +152,7 @@ function connectorBaseClass(status: AgentState['status']): string {
   switch (status) {
     case 'done':  return 'bg-leaf/60'
     case 'error': return 'bg-red-400/30'
-    default:      return 'bg-white/10'
+    default:      return 'bg-white/20'
   }
 }
 
@@ -163,7 +163,7 @@ function nodeCardClass(status: AgentState['status']): string {
     case 'done':    return 'border-leaf/30 bg-leaf/10'
     case 'running': return 'border-leaf/60 bg-leaf/5 shadow-glow'
     case 'error':   return 'border-red-400/40 bg-red-500/10'
-    default:        return 'border-white/10 bg-white/5'
+    default:        return 'border-white/25 bg-white/10'
   }
 }
 
@@ -172,7 +172,7 @@ function nodeIconBadgeClass(status: AgentState['status']): string {
     case 'done':    return 'bg-leaf/30 text-leaf'
     case 'running': return 'bg-leaf/20 text-leaf'
     case 'error':   return 'bg-red-500/20 text-red-400'
-    default:        return 'bg-white/10 text-mist-muted'
+    default:        return 'bg-white/15 text-mist'
   }
 }
 
@@ -181,7 +181,7 @@ function modelBadgeClass(status: AgentState['status']): string {
     case 'done':    return 'bg-leaf/20 text-leaf'
     case 'running': return 'bg-leaf/10 text-leaf/80'
     case 'error':   return 'bg-red-500/20 text-red-400'
-    default:        return 'bg-white/10 text-mist-muted'
+    default:        return 'bg-white/15 text-mist'
   }
 }
 
@@ -192,7 +192,7 @@ function StatusPill({ status }: { status: AgentState['status'] }) {
     status === 'done'    ? 'bg-leaf/20 text-leaf' :
     status === 'running' ? 'bg-leaf/10 text-leaf animate-pulse' :
     status === 'error'   ? 'bg-red-500/20 text-red-400' :
-                           'bg-white/10 text-mist-muted'
+                           'bg-white/20 text-mist'
 
   return (
     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-label transition-all duration-300 ${tone}`}>

@@ -67,7 +67,7 @@ export default function CompareView() {
             disabled={loading}
             className={`pill inline-flex items-center gap-2 px-6 py-3 text-[14px] font-medium transition-all duration-300 ${
               loading
-                ? 'cursor-not-allowed bg-cream text-secondary'
+                ? 'cursor-not-allowed bg-leaf-soft border border-leaf/30 text-forest/70'
                 : 'bg-leaf text-white shadow-glow hover:scale-105 hover:shadow-glow-lg'
             }`}
           >
@@ -124,7 +124,7 @@ function ContextEditor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={5}
-        className="w-full resize-none rounded-xl border border-hairline bg-canvas/60 p-3 text-[14px] text-primary outline-none transition-colors focus:border-leaf"
+        className="w-full resize-none rounded-xl border border-hairline bg-canvas p-3 text-[14px] text-primary outline-none transition-colors focus:border-leaf"
       />
     </div>
   )

@@ -43,6 +43,7 @@ class ChatResponse(BaseModel):
     field_values: dict[str, str] = {}
     ready: bool
     missing_required: list[str]
+    context_richness: int = 0
 
 
 @router.post("/upload")
@@ -105,4 +106,5 @@ async def process_chat(request: ChatRequest) -> ChatResponse:
         field_values=result.get("field_values", {}),
         ready=result["ready"],
         missing_required=missing_required,
+        context_richness=result.get("context_richness", 0),
     )

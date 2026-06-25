@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 from models import ChatMessage
 from agents.base import call_llm_chat, extract_json
@@ -10,51 +11,168 @@ REQUIRED_FIELDS = ["region", "crop", "beneficiaries"]
 OPTIONAL_FIELDS = ["budget", "staff"]
 ALL_FIELDS = REQUIRED_FIELDS + OPTIONAL_FIELDS
 
+_RICHNESS_WEIGHTS = {"region": 20, "crop": 20, "beneficiaries": 20, "budget": 20, "staff": 15}
+
+# Known crop/activity values — used to classify columns by their data, not just name
+_CROP_VALUES = {
+    "rice", "corn", "maize", "palay", "cassava", "wheat", "sorghum", "sugarcane",
+    "coconut", "banana", "mango", "pineapple", "coffee", "cacao", "abaca", "tobacco",
+    "vegetables", "vegetable", "legumes", "mongo", "peanut", "soybean", "camote",
+    "gabi", "ube", "kangkong", "pechay", "fishing", "aquaculture", "livestock",
+    "poultry", "cattle", "swine", "goat", "carabao", "farming", "agriculture",
+}
+
+# Column name token keywords (fast path for standard naming)
+_CROP_NAME_TOKENS = {"crop", "commodity", "activity", "livelihood", "product", "species", "variety"}
+_REGION_NAME_TOKENS = {"region", "province", "location", "area", "district", "municipality",
+                       "barangay", "place", "site", "zone", "address", "city", "town"}
+_BUDGET_NAME_TOKENS = {"budget", "fund", "funding", "cost", "amount", "allocation", "expense"}
+_STAFF_NAME_TOKENS = {"staff", "worker", "employee", "personnel", "extension", "agent", "officer"}
+
+
+def _col_tokens(name: str) -> set[str]:
+    return set(re.split(r"[\s_\-/]+", name.lower().strip()))
+
+
+def _best_text_value(col: dict, sample_rows: list[dict]) -> str:
+    """Return the most representative text value for a column."""
+    examples = [str(e).strip() for e in (col.get("examples") or []) if str(e).strip()]
+    if not examples and sample_rows:
+        val = str(sample_rows[0].get(col.get("name", ""), "")).strip()
+        if val:
+            examples = [val]
+    return examples[0] if examples else ""
+
+
+def _extract_excel_context(excel_preview: dict | None) -> tuple[list[str], dict[str, str]]:
+    """Deterministically extract context fields from the spreadsheet.
+
+    Two-pass approach:
+    1. Row count → beneficiaries (always unambiguous)
+    2. Column scan: match on name tokens first, then fall back to checking
+       whether the column's VALUES look like crop names (value-based detection).
+    The LLM handles anything this misses via semantic analysis of the full summary.
+    """
+    if not excel_preview:
+        return [], {}
+
+    auto_fields: list[str] = []
+    auto_values: dict[str, str] = {}
+
+    # Each row = one farmer/beneficiary
+    row_count = excel_preview.get("rows") or 0
+    if row_count > 0:
+        auto_fields.append("beneficiaries")
+        auto_values["beneficiaries"] = f"{row_count:,} (from survey rows)"
+
+    columns = excel_preview.get("columns") or []
+    sample_rows = excel_preview.get("sample_rows") or []
+
+    # Pass 1: match by column name tokens
+    for col in columns:
+        tokens = _col_tokens(col.get("name", ""))
+        val = _best_text_value(col, sample_rows)
+        col_count = col.get("count") or 0
+
+        if "crop" not in auto_fields and tokens & _CROP_NAME_TOKENS and val:
+            auto_fields.append("crop")
+            auto_values["crop"] = val
+        if "region" not in auto_fields and tokens & _REGION_NAME_TOKENS and val:
+            auto_fields.append("region")
+            auto_values["region"] = val
+        if "budget" not in auto_fields and tokens & _BUDGET_NAME_TOKENS and val:
+            auto_fields.append("budget")
+            auto_values["budget"] = val
+        # Staff: use the full column count (computed over all rows), not just the first sample value
+        if "staff" not in auto_fields and tokens & _STAFF_NAME_TOKENS and col_count > 0:
+            col_name = col.get("name", "")
+            auto_fields.append("staff")
+            auto_values["staff"] = f"{col_count} (from '{col_name}' column)"
+
+    # Pass 2: value-based crop detection for non-standard column names
+    if "crop" not in auto_fields:
+        for col in columns:
+            examples = [str(e).strip().lower() for e in (col.get("examples") or []) if str(e).strip()]
+            if not examples and sample_rows:
+                v = str(sample_rows[0].get(col.get("name", ""), "")).strip().lower()
+                if v:
+                    examples = [v]
+            if any(e in _CROP_VALUES for e in examples):
+                val = _best_text_value(col, sample_rows)
+                if val:
+                    auto_fields.append("crop")
+                    auto_values["crop"] = val
+                    break
+
+    return auto_fields, auto_values
+
+
+def _compute_richness(captured: list[str], excel_preview: dict | None) -> int:
+    score = sum(v for k, v in _RICHNESS_WEIGHTS.items() if k in captured)
+    if excel_preview:
+        score += 5
+    return min(score, 100)
+
 SYSTEM_PROMPT = """You are the intake assistant for AniKonsulta, a tool that designs \
 context-adapted social programs for smallholder agriculture and livelihood NGOs.
 
-Your job in this conversation is to gather the context needed to generate a program, \
-while being genuinely helpful. You can:
-- Answer the user's questions directly and intelligently.
-- Help the user reason through a field they are unsure about (e.g. suggest how to \
-estimate a budget from beneficiary count, or how to describe their region).
-- Read and reason about the uploaded spreadsheet. When a spreadsheet is provided you \
-are given per-column statistics (count, and for numeric columns min/mean/max/sum) plus \
-a few sample rows. Use these to answer questions about the data directly — e.g. report \
-the average of a numeric column from its "mean", or a range from min/max. Do not invent \
-numbers beyond what the statistics and samples show; if a question needs detail the \
-summary doesn't contain, say so.
+Your job is to gather context needed to generate a program while being genuinely helpful.
 
 You track these context fields:
-- region        (REQUIRED) — area and local conditions (infrastructure, weather, terrain)
+- region        (REQUIRED) — geographic area and local conditions
 - crop          (REQUIRED) — the crop or livelihood activity
-- beneficiaries (REQUIRED) — roughly how many people are targeted
-- budget        (optional) — total funds and period
+- beneficiaries (REQUIRED) — how many people are targeted
+- budget        (optional) — total funds available and period
 - staff         (optional) — number and roles of field staff
 
-STRICT RULES — follow these exactly:
-1. The "Already captured" list in the user message is authoritative. NEVER ask about \
-any field that appears there. Do not re-confirm, re-clarify, or mention it again.
-2. Scan the ENTIRE conversation history and spreadsheet summary before deciding what is \
-still missing. If a field can be inferred from prior messages, mark it captured.
-3. Ask for exactly ONE missing REQUIRED field per reply. Do not stack multiple questions.
-4. Once all three REQUIRED fields are captured, set "ready": true and stop asking \
-questions entirely — give a warm single-sentence confirmation and invite the user to \
-generate the program.
-5. If the user is stuck, help them think it through instead of repeating the same question.
-6. Never invent data the user did not provide.
+═══ SPREADSHEET ANALYSIS — do this whenever a spreadsheet is present ═══
+Analyze every column using BOTH the column name AND its sample values / statistics. \
+Do not rely on column names alone — a column named "q1" with values "rice, corn, palay" \
+is clearly a crop column. A column with values like "San Isidro, Sta. Cruz, Poblacion" \
+is clearly a location/region column regardless of its name.
 
-Return ONLY valid JSON, no prose outside it:
+For each context field, determine the best source column using this logic:
+- CROP: find the column whose values are crop names, livelihood activities, or farming \
+types (rice, corn, palay, cassava, fishing, livestock, etc.). Use the most common value \
+from the examples, not just the first row.
+- REGION: find the column whose values are place names — province, city, barangay, \
+municipality, region, or any geographic identifier. If multiple geographic columns exist \
+(e.g. province AND barangay), prefer the broader one (province > barangay).
+- BUDGET: find any column with monetary values or labeled as fund/budget/cost/allocation. \
+Report the total or average as appropriate.
+- STAFF: find any column indicating staff count or roles.
+- BENEFICIARIES: row count is always the beneficiary count (each row = one \
+farmer/household). This is already pre-captured — do not ask about it.
+
+If a field is clearly present in the data, capture it immediately. Only ask about fields \
+that are genuinely absent from the spreadsheet AND the conversation.
+═══════════════════════════════════════════════════════════════════════════
+
+STRICT RULES:
+1. [ALREADY CAPTURED] is permanent. Never ask about those fields again.
+2. Extract from ALL sources — spreadsheet columns, sample values, statistics, and chat.
+3. captured_fields must always include everything from [ALREADY CAPTURED] plus new finds. \
+Never shrink the list.
+4. Ask for exactly ONE missing field per reply. Priority: required fields first (region → \
+crop → beneficiaries), then optional (budget → staff). Never stack questions.
+5. Set "ready": true only after all three REQUIRED fields are captured AND you have asked \
+about budget and staff at least once (even if the user skips them). If the user says \
+"skip", "no budget", or equivalent, accept that and move on.
+6. Never invent data. If a value is ambiguous, describe what you see and ask to confirm.
+7. Be conversational — acknowledge what you found in the data before asking the next \
+question. e.g. "I can see from your spreadsheet that you have 5,000 rice farmers in \
+Northern Luzon. What budget do you have available for this program?"
+
+Return ONLY valid JSON:
 {
   "reply": "your conversational message to the user",
   "captured_fields": ["region", "crop", ...],
-  "field_values": {"region": "short plain-language value you understood", ...},
+  "field_values": {"region": "short plain-language value", ...},
   "ready": true or false
 }
 
-For every field listed in captured_fields, include a short (under 12 words)
-plain-language value for it in field_values — what you actually understood
-from the conversation or spreadsheet, not a restatement of the question.
+field_values must contain a short (under 15 words) plain-language value for every \
+captured field — what the data actually shows, not a restatement of the question.
 """
 
 
@@ -162,7 +280,15 @@ async def run_chat_assistant(
     Falls back to a safe deterministic question on any LLM/parse failure.
     """
     captured_so_far = previously_captured or []
-    messages = _build_messages(chat_messages, excel_preview, captured_so_far)
+
+    # Deterministically extract what the spreadsheet itself already provides.
+    # These are merged into [ALREADY CAPTURED] so the LLM never re-asks for them.
+    excel_auto_fields, excel_auto_values = _extract_excel_context(excel_preview)
+    enhanced_captured = list(dict.fromkeys(
+        [f for f in ALL_FIELDS if f in (set(captured_so_far) | set(excel_auto_fields))]
+    ))
+
+    messages = _build_messages(chat_messages, excel_preview, enhanced_captured)
 
     try:
         raw = await call_llm_chat(
@@ -176,15 +302,25 @@ async def run_chat_assistant(
             raise ValueError("expected a JSON object")
 
         reply = str(parsed.get("reply") or "").strip()
-        captured = [f for f in parsed.get("captured_fields", []) if f in ALL_FIELDS]
+        llm_captured = [f for f in parsed.get("captured_fields", []) if f in ALL_FIELDS]
+        # Final merge: enhanced_captured (excel + history) union LLM output — only grows.
+        captured = list(dict.fromkeys(
+            [f for f in ALL_FIELDS if f in (set(enhanced_captured) | set(llm_captured))]
+        ))
         raw_values = parsed.get("field_values") or {}
-        field_values = {
+        llm_values = {
             f: str(raw_values[f]).strip()
             for f in captured
             if f in raw_values and str(raw_values[f]).strip()
         }
-        # Single authoritative readiness check — all required fields must be captured.
-        ready = all(f in captured for f in REQUIRED_FIELDS)
+        # Excel auto-values as baseline; LLM values (from chat) take precedence.
+        field_values = {**excel_auto_values, **llm_values}
+
+        # Trust the LLM's ready signal — it now asks about optional fields before
+        # marking ready. Fall back to required-only check if LLM omits the field.
+        llm_ready = bool(parsed.get("ready", False))
+        required_met = all(f in captured for f in REQUIRED_FIELDS)
+        ready = llm_ready and required_met
 
         if not reply:
             reply = _fallback_reply(captured)
@@ -194,26 +330,35 @@ async def run_chat_assistant(
             "captured_fields": captured,
             "field_values": field_values,
             "ready": ready,
+            "context_richness": _compute_richness(captured, excel_preview),
         }
 
     except Exception:
         return {
-            "reply": _fallback_reply(captured_so_far),
-            "captured_fields": captured_so_far,
-            "field_values": {},
+            "reply": _fallback_reply(enhanced_captured),
+            "captured_fields": enhanced_captured,
+            "field_values": excel_auto_values,
             "ready": False,
+            "context_richness": _compute_richness(enhanced_captured, excel_preview),
         }
 
 
 def _fallback_reply(captured: list[str]) -> str:
     """Deterministic next-question when the LLM output is unusable."""
+    required_prompts = {
+        "region": "Which region is this for, and what are the local conditions "
+        "(infrastructure, weather, terrain)?",
+        "crop": "What crop or livelihood activity is the focus?",
+        "beneficiaries": "Roughly how many beneficiaries are you targeting?",
+    }
+    optional_prompts = {
+        "budget": "What is the total budget available, and over what period?",
+        "staff": "How many field staff do you have, and what are their roles?",
+    }
     for field in REQUIRED_FIELDS:
         if field not in captured:
-            prompts = {
-                "region": "Which region is this for, and what are the local conditions "
-                "(infrastructure, weather, terrain)?",
-                "crop": "What crop or livelihood activity is the focus?",
-                "beneficiaries": "Roughly how many beneficiaries are you targeting?",
-            }
-            return prompts[field]
-    return "I have the essentials — you can generate the program now, or add budget and staff for a richer plan."
+            return required_prompts[field]
+    for field in OPTIONAL_FIELDS:
+        if field not in captured:
+            return optional_prompts[field]
+    return "I have everything I need — press 'Review your context' to generate the program."
