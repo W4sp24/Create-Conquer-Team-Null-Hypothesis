@@ -46,6 +46,7 @@ export async function uploadExcel(file: File): Promise<UploadPreview> {
 export async function sendChat(
   messages: ChatMessage[],
   preview: UploadPreview | null,
+  capturedFields: string[] = [],
 ): Promise<ChatTurnResponse> {
   const excel_preview = preview
     ? {
@@ -61,7 +62,7 @@ export async function sendChat(
   const backend = await tryJson<ChatTurnResponse>('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_messages: messages, excel_preview }),
+    body: JSON.stringify({ chat_messages: messages, excel_preview, captured_fields: capturedFields }),
   })
 
   if (backend) return backend

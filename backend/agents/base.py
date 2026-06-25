@@ -34,6 +34,45 @@ async def call_llm(
     raise last_exc  # type: ignore[misc]
 
 
+async def call_llm_chat(
+    provider: str,
+    model: str,
+    messages: list[dict],
+    system_prompt: str = "",
+) -> str:
+    """Multi-turn async LLM call. `messages` is a pre-built [{role, content}] list.
+
+    The system prompt is prepended as a system message when provided.
+    Uses the same 2-attempt retry as call_llm.
+    """
+    if provider not in ("groq", "gemini"):
+        raise ValueError(f"Unknown provider: {provider!r}")
+
+    full_messages: list[dict] = []
+    if system_prompt:
+        full_messages.append({"role": "system", "content": system_prompt})
+    full_messages.extend(messages)
+
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            if provider == "groq":
+                return await asyncio.to_thread(_call_groq_messages, model, full_messages)
+            else:
+                # Gemini doesn't use the messages array natively in this wrapper;
+                # fall back to a flattened prompt for non-chat Gemini calls.
+                flattened = "\n".join(
+                    f"{m['role'].upper()}: {m['content']}" for m in full_messages
+                )
+                return await asyncio.to_thread(_call_gemini, model, "", flattened)
+        except Exception as exc:
+            last_exc = exc
+            if attempt == 0:
+                await asyncio.sleep(1)
+
+    raise last_exc  # type: ignore[misc]
+
+
 def _call_groq(model: str, system_prompt: str, user_prompt: str) -> str:
     from groq import Groq
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -41,6 +80,18 @@ def _call_groq(model: str, system_prompt: str, user_prompt: str) -> str:
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_prompt})
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.2,
+    )
+    return resp.choices[0].message.content
+
+
+def _call_groq_messages(model: str, messages: list[dict]) -> str:
+    """Call Groq with a pre-built multi-turn messages array."""
+    from groq import Groq
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     resp = client.chat.completions.create(
         model=model,
         messages=messages,

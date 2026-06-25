@@ -107,6 +107,10 @@ export default {
           '60%': { opacity: '1', transform: 'scale(1.08) rotate(2deg)' },
           '100%': { opacity: '1', transform: 'scale(1) rotate(0deg)' },
         },
+        travel: {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(100%)' },
+        },
       },
       animation: {
         rise: 'rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
@@ -119,6 +123,7 @@ export default {
         float: 'float 3s ease-in-out infinite',
         sparkle: 'sparkle 1.5s ease-in-out infinite',
         stamp: 'stamp 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
+        travel: 'travel 1s linear infinite',
       },
       transitionTimingFunction: {
         smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',

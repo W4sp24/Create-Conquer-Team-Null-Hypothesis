@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from models import ChatMessage
-from agents.base import call_llm, extract_json
+from agents.base import call_llm_chat, extract_json
 from config import GROQ_FAST
 
 # Context fields the intake assistant tracks. Required ones must be captured
@@ -33,12 +33,16 @@ You track these context fields:
 - staff         (optional) — number and roles of field staff
 
 Rules:
+- NEVER ask for a field that is already listed in the "Already captured" section of the \
+user message. If region is already captured, do not ask about region again under any \
+circumstances.
 - Consider both the chat conversation AND the spreadsheet summary when deciding which \
 fields are captured. A field counts as captured if it is clearly present in either.
 - Ask for ONE missing REQUIRED field at a time, with a concrete, data-aware question. \
 Do not interrogate — keep it conversational.
-- If all REQUIRED fields are captured, set "ready" to true and invite the user to \
-generate the program (they may still add budget/staff for a richer plan).
+- If all REQUIRED fields are captured, set "ready" to true, give a warm confirmation, \
+and invite the user to generate the program (they may still add budget/staff for a \
+richer plan). Do not keep asking questions once all required fields are captured.
 - If the user is stuck on a required field, help them think it through instead of just \
 repeating the question.
 - Never invent data the user did not provide.
@@ -100,31 +104,71 @@ def _excel_summary(excel_preview: dict | None) -> str:
     return "\n".join(lines)
 
 
+def _build_messages(
+    chat_messages: list[ChatMessage],
+    excel_preview: dict | None,
+    previously_captured: list[str],
+) -> list[dict]:
+    """Build a proper multi-turn messages array for the Groq API.
+
+    - Frontend role "user"   → API role "user"
+    - Frontend role "system" → API role "assistant" (these are the bot's prior replies)
+    - Appends the spreadsheet summary + grounding context as the final user message.
+    """
+    messages: list[dict] = []
+
+    for m in chat_messages:
+        if m.role == "user":
+            messages.append({"role": "user", "content": m.content})
+        else:
+            # "system" role on the frontend means an assistant reply
+            messages.append({"role": "assistant", "content": m.content})
+
+    # Build the grounding context appended to the final user turn
+    if previously_captured:
+        captured_line = f"Already captured: {', '.join(previously_captured)}"
+    else:
+        captured_line = "Already captured: none yet"
+
+    final_turn = (
+        f"{captured_line}\n\n"
+        f"Spreadsheet summary:\n{_excel_summary(excel_preview)}\n\n"
+        "Respond to the latest user message and report which context fields are captured."
+    )
+
+    # If the last message is a user message, augment it with context.
+    # If the conversation is empty or ends with an assistant message, append a new user turn.
+    if messages and messages[-1]["role"] == "user":
+        messages[-1] = {
+            "role": "user",
+            "content": messages[-1]["content"] + f"\n\n---\n{final_turn}",
+        }
+    else:
+        messages.append({"role": "user", "content": final_turn})
+
+    return messages
+
+
 async def run_chat_assistant(
     chat_messages: list[ChatMessage],
     excel_preview: dict | None = None,
+    previously_captured: list[str] | None = None,
 ) -> dict:
     """Conversational intake assistant (GROQ_FAST).
 
-    Returns {"reply": str, "captured_fields": list[str], "ready": bool}. Decides
-    readiness from the chat history plus the parsed Excel summary. Falls back to a
-    safe ask on any LLM/parse failure so the chat never breaks.
+    Returns {"reply": str, "captured_fields": list[str], "field_values": dict, "ready": bool}.
+    Uses a proper multi-turn messages array so the model maintains correct turn boundaries
+    and never re-asks for already-captured fields.
+    Falls back to a safe deterministic question on any LLM/parse failure.
     """
-    transcript = "\n".join(f"{m.role}: {m.content}" for m in chat_messages) or "(no messages yet)"
-
-    user_prompt = f"""Spreadsheet summary:
-{_excel_summary(excel_preview)}
-
-Conversation so far:
-{transcript}
-
-Respond to the latest user message and report which context fields are captured."""
+    captured_so_far = previously_captured or []
+    messages = _build_messages(chat_messages, excel_preview, captured_so_far)
 
     try:
-        raw = await call_llm(
+        raw = await call_llm_chat(
             provider="groq",
             model=GROQ_FAST,
-            prompt=user_prompt,
+            messages=messages,
             system_prompt=SYSTEM_PROMPT,
         )
         parsed = extract_json(raw)
@@ -139,10 +183,8 @@ Respond to the latest user message and report which context fields are captured.
             for f in captured
             if f in raw_values and str(raw_values[f]).strip()
         }
-        # Trust the model's readiness only if it is consistent with required coverage.
-        ready = bool(parsed.get("ready")) and all(f in captured for f in REQUIRED_FIELDS)
-        if not ready:
-            ready = all(f in captured for f in REQUIRED_FIELDS)
+        # Single authoritative readiness check — all required fields must be captured.
+        ready = all(f in captured for f in REQUIRED_FIELDS)
 
         if not reply:
             reply = _fallback_reply(captured)
@@ -156,8 +198,8 @@ Respond to the latest user message and report which context fields are captured.
 
     except Exception:
         return {
-            "reply": _fallback_reply([]),
-            "captured_fields": [],
+            "reply": _fallback_reply(captured_so_far),
+            "captured_fields": captured_so_far,
             "field_values": {},
             "ready": False,
         }
