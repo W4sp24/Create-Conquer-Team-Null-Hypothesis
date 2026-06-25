@@ -4,6 +4,7 @@ import AgentStatusPage from './pages/AgentStatusPage'
 import OutputPage from './pages/OutputPage'
 import SourcesPage from './pages/SourcesPage'
 import CompareView from './components/CompareView'
+import RoadmapPage from './pages/RoadmapPage'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/output" element={<OutputPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/compare" element={<CompareView />} />
+      <Route path="/roadmap" element={<RoadmapPage />} />
     </Routes>
   )
 }

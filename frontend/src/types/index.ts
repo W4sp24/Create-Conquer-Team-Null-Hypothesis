@@ -84,6 +84,24 @@ export interface ProgramOutput {
   confidence_level: number // 0.0–1.0
 }
 
+// ── Roadmap types ─────────────────────────────────────────────────────────────
+
+export interface RoadmapMilestone {
+  month: string
+  title: string
+  description: string
+  deliverables: string[]
+  responsible: string[]
+}
+
+export interface RoadmapOutput {
+  run_id: string
+  summary: string
+  milestones: RoadmapMilestone[]
+  success_criteria: string[]
+  key_risks: string[]
+}
+
 /** Response from POST /compare — two programs from two context profiles. */
 export interface CompareResponse {
   profile_a: ProgramOutput
