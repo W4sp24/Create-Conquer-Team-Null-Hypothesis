@@ -77,7 +77,7 @@ export default function SourcesPage() {
                 onClick={() => fileRef.current?.click()}
                 className={`pill inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium transition-all ${
                   busy
-                    ? 'cursor-not-allowed bg-cream text-secondary'
+                    ? 'cursor-not-allowed bg-leaf-soft border border-leaf/30 text-forest/70'
                     : 'bg-leaf text-white shadow-glow hover:scale-105'
                 }`}
               >
@@ -110,7 +110,7 @@ export default function SourcesPage() {
               {sources.map((s) => (
                 <div
                   key={s.filename}
-                  className="group flex items-start gap-2.5 rounded-xl border border-hairline bg-canvas/60 px-3 py-3 shadow-sm transition-all duration-300 hover:border-leaf/50 hover:bg-leaf-soft"
+                  className="group flex items-start gap-2.5 rounded-xl border border-hairline bg-canvas px-3 py-3 shadow-sm transition-all duration-300 hover:border-leaf/50 hover:bg-leaf-soft"
                 >
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-leaf-soft text-forest">
                     <FileText size={15} strokeWidth={1.6} />

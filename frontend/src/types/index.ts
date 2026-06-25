@@ -115,6 +115,7 @@ export interface ChatTurnResponse {
   field_values: Record<string, string>
   ready: boolean
   missing_required: string[]
+  context_richness: number  // 0–100 integer, weighted by field importance + Excel bonus
 }
 
 // ── UI-only types ────────────────────────────────────────────────────────────

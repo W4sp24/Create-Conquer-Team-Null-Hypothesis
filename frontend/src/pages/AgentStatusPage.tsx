@@ -94,7 +94,7 @@ export default function AgentStatusPage() {
             className={`pill inline-flex items-center gap-1.5 px-5 py-2.5 text-[14px] font-medium transition-all duration-300 ${
               done
                 ? 'bg-leaf text-white shadow-glow hover:scale-105 hover:shadow-glow-lg'
-                : 'cursor-not-allowed bg-cream text-secondary'
+                : 'cursor-not-allowed bg-leaf-soft border border-leaf/30 text-forest/70'
             }`}
           >
             View program
