@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, GitCompare, Loader2 } from 'lucide-react'
+import { ArrowLeft, GitCompare, Loader2, Printer } from 'lucide-react'
 import TopNav from '../components/TopNav'
 import FloatingParticles from '../components/FloatingParticles'
 import ProgramOutputView from '../components/ProgramOutput'
@@ -74,8 +74,18 @@ export default function OutputPage() {
 
         {status === 'ready' && program && (
           <>
+            <div className="no-print mb-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="pill inline-flex items-center gap-2 border border-hairline bg-white px-4 py-2 text-[13px] font-medium text-forest transition-all duration-300 hover:scale-105 hover:border-leaf hover:shadow-glow"
+              >
+                <Printer size={15} strokeWidth={1.8} />
+                Print / Export
+              </button>
+            </div>
             <ProgramOutputView program={program} />
-            <div className="mt-8 flex justify-center">
+            <div className="no-print mt-8 flex justify-center">
               <Link
                 to="/compare"
                 className="pill inline-flex items-center gap-2 border border-hairline bg-white px-5 py-2.5 text-[14px] font-medium text-forest transition-all duration-300 hover:scale-105 hover:border-leaf hover:shadow-glow"

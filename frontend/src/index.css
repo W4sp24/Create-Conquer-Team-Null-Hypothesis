@@ -338,3 +338,18 @@
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@media print {
+  header,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .card-surface {
+    box-shadow: none !important;
+    border: 1px solid #e7e3d7;
+  }
+}
