@@ -23,8 +23,10 @@ This spec covers making the user a deliberate checkpoint in the pipeline — not
 
 **Non-goals**
 - No inline field-editing widgets on the new screen — "going back" returns to the chat thread (where the existing conversational intake already works well), not a form.
-- No change to the chat assistant's backend logic — `chat_assistant.py`'s required-field gating is already correct; this spec only makes the frontend honor it.
+- No change to the chat assistant's required-field **gating** logic — `chat_assistant.py`'s rule that `ready` cannot be true with a required field missing is already correct and stays untouched.
 - No changes to Output/roadmap/PPTX — separate spec.
+
+**Correction from initial draft:** showing the *actual captured value* per field (Goal 2) is not achievable with zero backend changes — `POST /chat` today returns only `captured_fields: list[str]` (which keys are captured), never the value extracted for each. A small, contained backend addition is required: the assistant must also return what it extracted. See §4a below.
 
 ## Design
 
@@ -49,7 +51,10 @@ In `InputPage.tsx`: `canGenerate = ready || preview !== null` → drop the bypas
 This single change fixes the "invisible button" complaint (something is always visible) and enforces the "don't run until required fields are met" requirement (the only path to starting a run requires passing through the now-correctly-gated button into a screen that itself requires `ready`).
 
 ### 4. Chat assistant persistence
-No change — `chat_assistant.py` already cannot return `ready: true` with a required field missing, and its fallback already asks for the next missing required field one at a time. This spec relies on that being correct, and does not modify it.
+No change to gating — `chat_assistant.py` already cannot return `ready: true` with a required field missing, and its fallback already asks for the next missing required field one at a time. This spec relies on that being correct, and does not modify it.
+
+### 4a. Backend addition: return captured values, not just keys
+`chat_assistant.py`'s `SYSTEM_PROMPT` JSON schema gains one field: `"field_values": {"<field_key>": "<short extracted value>", ...}` for whichever fields are in `captured_fields` (the LLM already has this information when it decides a field is captured — it is only not currently asked to report it). `run_chat_assistant` parses and returns `field_values: dict[str, str]`, filtered to keys in `ALL_FIELDS`, defaulting to `{}` on any failure (same fallback posture as `captured_fields`/`ready` today). `routes/input.py`'s `ChatResponse` gains `field_values: dict[str, str] = {}`, populated from the assistant's result. This is additive to an existing, working JSON contract — not a new endpoint or a change to gating.
 
 ## Visual Design (frontend-design pass)
 
@@ -69,16 +74,19 @@ Applied within AniKonsulta's existing token system — no new colors, no new typ
 
 | File | Change |
 |---|---|
-| `frontend/src/pages/ReviewContextPage.tsx` | **New** — the Review Context screen |
+| `backend/agents/chat_assistant.py` | `SYSTEM_PROMPT` gains the `field_values` instruction; `run_chat_assistant` returns `field_values: dict[str, str]` |
+| `backend/routes/input.py` | `ChatResponse` gains `field_values: dict[str, str] = {}`, populated in `process_chat` |
+| `frontend/src/types/index.ts` | `ChatTurnResponse` gains `field_values: Record<string, string>`; `ContextField.detail` becomes the real captured value (already optional-string typed — no shape change needed there) |
+| `frontend/src/lib/api.ts` | `sendChat`'s network-failure fallback object gains `field_values: {}` |
 | `frontend/src/components/ConfirmationSeal.tsx` | **New** — the seal SVG icon, used by both Context Status and the new screen |
-| `frontend/src/components/ContextStatus.tsx` | Add captured values + "why this matters" text + "Review & generate" button; swap `Check` for `ConfirmationSeal` |
-| `frontend/src/components/ChatBox.tsx` | Generate button always renders; label/state driven by `ready` + `missing_required`, navigates instead of calling `onGenerate` directly when not yet on the Review screen |
-| `frontend/src/pages/InputPage.tsx` | Fix `canGenerate` (drop the bypass); `handleGenerate`'s actual `startRun` call moves to `ReviewContextPage`; pass `missing_required` down |
+| `frontend/src/components/ContextStatus.tsx` | Show `field.detail` (the real value) instead of the literal word "captured"; add "why this matters" text; swap `Check` for `ConfirmationSeal`; add "Review & generate" button when ready |
+| `frontend/src/components/ChatBox.tsx` | Generate button always renders; label/state driven by `ready` + `missing_required` |
+| `frontend/src/pages/InputPage.tsx` | Fix `canGenerate` (drop the bypass); store `fieldValues` state from `res.field_values`; build `fields` using real values; `handleGenerate` navigates to `/review` instead of calling `startRun` directly |
+| `frontend/src/pages/ReviewContextPage.tsx` | **New** — the Review Context screen; owns the actual `startRun` call (moved from `InputPage`) |
 | `frontend/src/App.tsx` | Add the `/review` route |
-| `frontend/src/types/index.ts` | Add `missing_required` to wherever `ChatTurnResponse`'s shape is consumed on this page (already present in the type, per existing `POST /chat` contract — confirm before assuming a change is needed) |
 | `frontend/tailwind.config.ts` | Add the `stamp` keyframe/animation (scale-up-then-settle) alongside existing keyframes — no new colors |
 
-No backend changes.
+Backend change is additive only (new response field, same endpoint, same gating rule) — no new endpoints, no schema breakage for existing fields.
 
 ## Testing / Verification
 
@@ -88,3 +96,4 @@ No automated frontend test suite exists in this repo (confirmed in prior session
 - Click "Add more info" from the Review screen, confirm it returns to Input with chat history intact.
 - Click "Looks right — generate →", confirm the run actually starts (same `POST /run` behavior as today).
 - Toggle `prefers-reduced-motion` and confirm the seal stamp degrades to a fade, not a jump cut.
+- `cd backend && pytest tests/test_routes.py -v` after the `field_values` addition — existing `/chat` contract tests must still pass, plus confirm a captured field's value is a non-empty string in the response.
