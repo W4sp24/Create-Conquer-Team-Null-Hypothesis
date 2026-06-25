@@ -94,6 +94,7 @@ export interface CompareResponse {
 export interface ChatTurnResponse {
   reply: string
   captured_fields: string[]
+  field_values: Record<string, string>
   ready: boolean
   missing_required: string[]
 }
