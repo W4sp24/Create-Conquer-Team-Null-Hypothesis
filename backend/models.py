@@ -111,3 +111,20 @@ class SourceMetadata(BaseModel):
 class CompareRequest(BaseModel):
     profile_a: ContextPayload
     profile_b: ContextPayload
+
+
+# ── Roadmap ────────────────────────────────────────────────────────────────────
+
+class RoadmapMilestone(BaseModel):
+    month: str            # e.g. "Month 1–2"
+    title: str
+    description: str
+    deliverables: list[str]
+    responsible: list[str]   # staff roles accountable
+
+class RoadmapOutput(BaseModel):
+    run_id: str
+    summary: str             # one-paragraph executive summary of the roadmap
+    milestones: list[RoadmapMilestone]
+    success_criteria: list[str]
+    key_risks: list[str]

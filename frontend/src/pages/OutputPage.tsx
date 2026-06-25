@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, GitCompare, Loader2, Printer } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, GitCompare, Loader2, Map, Printer } from 'lucide-react'
 import TopNav from '../components/TopNav'
 import FloatingParticles from '../components/FloatingParticles'
 import ProgramOutputView from '../components/ProgramOutput'
@@ -12,8 +12,14 @@ type Status = 'loading' | 'ready' | 'notfound'
 export default function OutputPage() {
   const [params] = useSearchParams()
   const runId = params.get('run')
+  const navigate = useNavigate()
   const [program, setProgram] = useState<ProgramOutput | null>(null)
   const [status, setStatus] = useState<Status>('loading')
+
+  function handleGenerateRoadmap() {
+    if (!runId) return
+    navigate(`/roadmap?run=${encodeURIComponent(runId)}`)
+  }
 
   useEffect(() => {
     if (!runId) {
@@ -74,7 +80,16 @@ export default function OutputPage() {
 
         {status === 'ready' && program && (
           <>
-            <div className="no-print mb-4 flex justify-end">
+            <div className="no-print mb-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={handleGenerateRoadmap}
+                className="pill inline-flex items-center gap-2 bg-leaf px-4 py-2 text-[13px] font-medium text-white shadow-glow transition-all duration-300 hover:scale-105 hover:bg-leaf-bright"
+              >
+                <Map size={15} strokeWidth={1.8} />
+                Generate Roadmap
+              </button>
+
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -84,7 +99,9 @@ export default function OutputPage() {
                 Print / Export
               </button>
             </div>
+
             <ProgramOutputView program={program} />
+
             <div className="no-print mt-8 flex justify-center">
               <Link
                 to="/compare"
