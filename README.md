@@ -1,4 +1,4 @@
-# AniKonsulta — Adaptive Intervention Synthesizer
+# AniKonsulta — AdaptAction Engine
 
 > Same need + different context = different solution.
 
