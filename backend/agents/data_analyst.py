@@ -18,10 +18,9 @@ async def run_data_analyst(
         # Build Excel summary
         excel_summary = _summarize_excel(context.excel_data)
         
-        # Build chat summary
-        chat_summary = "\n".join(
-            f"{msg.role}: {msg.content}" for msg in context.chat_messages
-        )
+        # Build chat summary — last 8 messages is enough; older turns are redundant
+        recent = context.chat_messages[-8:]
+        chat_summary = "\n".join(f"{msg.role}: {msg.content}" for msg in recent)
         
         # System prompt
         system_prompt = """You are a data analyst extracting key metrics from field data.
@@ -43,7 +42,8 @@ Rules:
 - Be conservative — if unsure, use null"""
 
         # User prompt
-        user_prompt = f"""Excel data summary:
+        goal_line = f"Program goal: {context.goal}.\n" if context.goal else ""
+        user_prompt = f"""{goal_line}Excel data summary:
 {excel_summary}
 
 Chat context:
@@ -87,18 +87,14 @@ Extract structured metrics as JSON."""
 
 
 def _summarize_excel(rows: list) -> str:
-    """Convert Excel rows to a readable summary."""
+    """Convert Excel rows to a compact summary."""
     if not rows:
         return "No Excel data provided."
-    
-    # Show first 5 rows as sample
     lines = [f"Total rows: {len(rows)}", "Sample rows:"]
-    for i, row in enumerate(rows[:5], 1):
+    for i, row in enumerate(rows[:3], 1):
         lines.append(f"Row {i}: {row.data}")
-    
-    if len(rows) > 5:
-        lines.append(f"... and {len(rows) - 5} more rows")
-    
+    if len(rows) > 3:
+        lines.append(f"...and {len(rows) - 3} more rows")
     return "\n".join(lines)
 
 # Made with Bob

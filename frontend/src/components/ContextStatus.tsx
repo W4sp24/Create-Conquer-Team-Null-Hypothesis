@@ -9,6 +9,7 @@ interface ContextStatusProps {
 }
 
 const WHY_TEXT: Record<ContextFieldKey, string> = {
+  goal: 'Defines the type of program to generate.',
   region: 'Shapes climate and infrastructure assumptions.',
   crop: 'Determines which interventions are relevant.',
   beneficiaries: 'Sets the scale the program is designed for.',

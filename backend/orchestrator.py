@@ -87,4 +87,5 @@ async def run_pipeline(
         cast(RiskMneOutput, risk),
         run_id,
         sse_queue,
+        goal=context.goal,
     )
