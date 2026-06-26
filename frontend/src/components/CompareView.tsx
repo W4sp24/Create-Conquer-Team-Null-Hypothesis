@@ -29,6 +29,7 @@ export default function CompareView() {
       run_id: crypto.randomUUID(),
       excel_data: [],
       chat_messages: [{ role: 'user', content: text }],
+      goal: '',
     })
     const res = await compareProfiles(profile(textA), profile(textB))
     if (res) setResult(res)
