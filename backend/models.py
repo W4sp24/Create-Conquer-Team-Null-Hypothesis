@@ -17,6 +17,7 @@ class ContextPayload(BaseModel):
     run_id: str
     excel_data: list[ExcelRow]
     chat_messages: list[ChatMessage]
+    goal: str = ""  # program type stated by user (e.g. "market linkage", "input supply")
 
 
 # ── Evidence Retriever output ──────────────────────────────────────────────────

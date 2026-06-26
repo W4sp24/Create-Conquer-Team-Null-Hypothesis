@@ -10,7 +10,7 @@ import {
   Wand2,
 } from 'lucide-react'
 import type { ProgramOutput as Program } from '../types'
-import RiskBadge from './RiskBadge'
+import RiskBadge, { RISK_EXPLANATION } from './RiskBadge'
 
 /** Renders a complete generated program. Adaptations Made is emphasized — it is
  *  the core "same need, different context" differentiator. */
@@ -33,16 +33,31 @@ export default function ProgramOutput({ program }: { program: Program }) {
           {program.target_beneficiaries}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span
-            className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary"
-            title="Reflects how complete and specific the input data was — more detail in your Excel/chat context raises this score."
+          <Tooltip content="How completely the agents' inputs covered the key dimensions of a strong program design. High confidence (80%+) means recommendations are specific and well-grounded in your data. Low confidence means critical details were missing — the program is still generated but relies more on general best practices than your actual context.">
+            <span className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary cursor-default">
+              Confidence:{' '}
+              <span className="font-semibold text-primary">{Math.round(program.confidence_level * 100)}%</span>
+            </span>
+          </Tooltip>
+          <Tooltip
+            content={
+              <>
+                <span className="font-semibold block mb-1">Overall implementation risk</span>
+                {RISK_EXPLANATION[risk.risk_level] ?? RISK_EXPLANATION.unknown}
+                {risk.risk_flags.length > 0 && (
+                  <span className="block mt-1.5 text-white/60">
+                    {risk.risk_flags.length} specific risk flag{risk.risk_flags.length > 1 ? 's' : ''} identified — see Risk &amp; Mitigation below.
+                  </span>
+                )}
+              </>
+            }
           >
-            Confidence:{' '}
-            <span className="font-semibold text-primary">{Math.round(program.confidence_level * 100)}%</span>
-          </span>
-          <RiskBadge level={risk.risk_level} />
+            <RiskBadge level={risk.risk_level} />
+          </Tooltip>
           {program.per_beneficiary_cost_usd != null && (
-            <Stat label="Cost / beneficiary" value={`$${program.per_beneficiary_cost_usd}`} />
+            <Tooltip content="Estimated average cost to deliver the full set of program services to one beneficiary over the rollout period. Multiply by your total beneficiary count to project the full budget requirement.">
+              <Stat label="Cost / beneficiary" value={`$${program.per_beneficiary_cost_usd}`} />
+            </Tooltip>
           )}
           {program.total_budget_estimate && (
             <Stat label="Total budget" value={program.total_budget_estimate} />
@@ -212,9 +227,24 @@ function Section({
   )
 }
 
+function Tooltip({ content, children }: { content: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <span className="group/tip relative inline-flex">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2.5 w-64 -translate-x-1/2 rounded-xl bg-primary px-3 py-2.5 text-[11px] leading-snug text-white/90 shadow-lg opacity-0 transition-opacity duration-150 group-hover/tip:opacity-100"
+      >
+        {content}
+        <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-primary" />
+      </span>
+    </span>
+  )
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary">
+    <span className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary cursor-default">
       {label}: <span className="font-semibold capitalize text-primary">{value}</span>
     </span>
   )
@@ -259,24 +289,29 @@ function GroundingBadge({ citations }: { citations: string[] }) {
 
   if (none) {
     return (
-      <span className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary">
-        No sources retrieved yet
-      </span>
+      <Tooltip content="No knowledge base documents were retrieved — recommendations are based on general best practices only. Ingest sources on the Sources page to enable evidence-grounded, citation-backed programs.">
+        <span className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary cursor-default">
+          No sources retrieved yet
+        </span>
+      </Tooltip>
     )
   }
 
   return (
-    <button
-      type="button"
-      onClick={scrollToCitations}
-      className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary transition-colors hover:border-leaf hover:text-forest"
-      title="Jump to the full source list at the bottom of this program"
+    <Tooltip
+      content={`Recommendations were derived from ${global} curated knowledge base document${global !== 1 ? 's' : ''}${org > 0 ? ` and ${org} of your uploaded document${org !== 1 ? 's' : ''}` : ''}, not generated from general knowledge alone. More source documents give the agents more proven interventions to adapt from. Click to see full citations.`}
     >
-      Grounded in{' '}
-      <span className="font-semibold text-primary">
-        {global} specialized{org > 0 ? ` + ${org} your docs` : ''}
-      </span>
-    </button>
+      <button
+        type="button"
+        onClick={scrollToCitations}
+        className="rounded-full border border-hairline bg-canvas/60 px-3 py-1.5 text-[12px] text-secondary transition-colors hover:border-leaf hover:text-forest"
+      >
+        Grounded in{' '}
+        <span className="font-semibold text-primary">
+          {global} specialized{org > 0 ? ` + ${org} your docs` : ''}
+        </span>
+      </button>
+    </Tooltip>
   )
 }
 

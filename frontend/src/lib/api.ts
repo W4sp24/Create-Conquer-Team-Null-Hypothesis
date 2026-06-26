@@ -1,6 +1,7 @@
-// API client. Every call hits the real backend via the Vite /api proxy. There
-// are no canned-data fallbacks — when a call fails it returns an honest empty/
-// error result so the UI never shows fabricated data.
+// API client. In dev, VITE_API_URL is unset and calls go through the Vite /api
+// proxy (which strips the prefix and routes to localhost:8000). In production on
+// Vercel, set VITE_API_URL=https://<railway-app>.up.railway.app and calls go
+// directly to the backend with CORS.
 
 import type {
   ChatMessage,
@@ -13,6 +14,8 @@ import type {
   UploadPreview,
 } from '../types'
 import { parseExcelClient, summarizeColumns } from './mock'
+
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 /** Whether a fetch succeeded with a JSON body. Network errors / 404s → false. */
 async function tryJson<T>(input: RequestInfo, init?: RequestInit): Promise<T | null> {
@@ -32,10 +35,6 @@ async function tryJson<T>(input: RequestInfo, init?: RequestInit): Promise<T | n
  * the caller can render the error chip.
  */
 export async function uploadExcel(file: File): Promise<UploadPreview> {
-  // Parsing is authoritative client-side (SheetJS) — it yields the full preview
-  // (rows/cols/headers/sampleRows/excelData) that the UI and ContextPayload need.
-  // The backend POST /upload returns a different shape ({rows, row_count}) and
-  // adds nothing the client lacks, so we don't merge it back in.
   return parseExcelClient(file)
 }
 
@@ -60,7 +59,7 @@ export async function sendChat(
       }
     : null
 
-  const backend = await tryJson<ChatTurnResponse>('/api/chat', {
+  const backend = await tryJson<ChatTurnResponse>(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_messages: messages, excel_preview, captured_fields: capturedFields }),
@@ -84,19 +83,19 @@ export async function sendChat(
 
 /** List org-KB sources for the left panel. Empty list on failure (no fakes). */
 export async function getSources(): Promise<SourceMetadata[]> {
-  const backend = await tryJson<SourceMetadata[]>('/api/sources')
+  const backend = await tryJson<SourceMetadata[]>(`${API_BASE}/sources`)
   return backend ? backend.filter((s) => s.source_type === 'org_upload') : []
 }
 
 /** List the curated global evidence base (read-only specialized KB). */
 export async function getSpecializedSources(): Promise<SourceMetadata[]> {
-  const backend = await tryJson<SourceMetadata[]>('/api/sources/specialized')
+  const backend = await tryJson<SourceMetadata[]>(`${API_BASE}/sources/specialized`)
   return backend ?? []
 }
 
 /** Start a pipeline run. Returns the backend-assigned run_id, or null on failure. */
 export async function startRun(payload: ContextPayload): Promise<string | null> {
-  const backend = await tryJson<{ run_id: string }>('/api/run', {
+  const backend = await tryJson<{ run_id: string }>(`${API_BASE}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -109,7 +108,7 @@ export async function startRun(payload: ContextPayload): Promise<string | null> 
  * still running (GET /result/{run_id} 404s until it finishes) so callers can poll.
  */
 export async function getResult(runId: string): Promise<ProgramOutput | null> {
-  return tryJson<ProgramOutput>(`/api/result/${encodeURIComponent(runId)}`)
+  return tryJson<ProgramOutput>(`${API_BASE}/result/${encodeURIComponent(runId)}`)
 }
 
 /** Run two context profiles and return both programs side-by-side. */
@@ -117,7 +116,7 @@ export async function compareProfiles(
   profileA: ContextPayload,
   profileB: ContextPayload,
 ): Promise<CompareResponse | null> {
-  return tryJson<CompareResponse>('/api/compare', {
+  return tryJson<CompareResponse>(`${API_BASE}/compare`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile_a: profileA, profile_b: profileB }),
@@ -130,16 +129,14 @@ export async function uploadSource(
 ): Promise<{ filename: string; status: string; chunk_count: number } | null> {
   const form = new FormData()
   form.append('file', file)
-  return tryJson('/api/sources/upload', { method: 'POST', body: form })
+  return tryJson(`${API_BASE}/sources/upload`, { method: 'POST', body: form })
 }
 
 /**
  * Generate an AI roadmap for a completed program run.
- * POSTs to /api/roadmap/{run_id} and returns the structured RoadmapOutput,
- * or null on failure / run not yet complete.
  */
 export async function generateRoadmap(runId: string): Promise<RoadmapOutput | null> {
-  return tryJson<RoadmapOutput>(`/api/roadmap/${encodeURIComponent(runId)}`, {
+  return tryJson<RoadmapOutput>(`${API_BASE}/roadmap/${encodeURIComponent(runId)}`, {
     method: 'POST',
   })
 }
@@ -147,7 +144,35 @@ export async function generateRoadmap(runId: string): Promise<RoadmapOutput | nu
 /** Remove a source (all its chunks) from the org knowledge base. */
 export async function deleteSource(filename: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/sources/${encodeURIComponent(filename)}`, {
+    const res = await fetch(`${API_BASE}/sources/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+// ─── Admin: Specialized KB management ────────────────────────────────────────
+
+/** List all sources in the specialized (curated) knowledge base. */
+export async function getAdminSpecializedSources(): Promise<SourceMetadata[]> {
+  return (await tryJson<SourceMetadata[]>(`${API_BASE}/admin/specialized-sources`)) ?? []
+}
+
+/** Upload and ingest a document into the specialized knowledge base. */
+export async function ingestSpecialized(
+  file: File,
+): Promise<{ filename: string; status: string; chunk_count: number } | null> {
+  const form = new FormData()
+  form.append('file', file)
+  return tryJson(`${API_BASE}/admin/ingest-specialized`, { method: 'POST', body: form })
+}
+
+/** Remove a source from the specialized knowledge base. */
+export async function deleteSpecializedSource(filename: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/admin/specialized/${encodeURIComponent(filename)}`, {
       method: 'DELETE',
     })
     return res.ok

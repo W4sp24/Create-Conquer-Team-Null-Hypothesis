@@ -45,6 +45,7 @@ function loadPersistedChat(): PersistedChatState | null {
 }
 
 const FIELD_CONFIG: { key: ContextFieldKey; label: string; required: boolean }[] = [
+  { key: 'goal', label: 'Program goal', required: true },
   { key: 'region', label: 'Region & conditions', required: true },
   { key: 'crop', label: 'Crop / activity', required: true },
   { key: 'beneficiaries', label: 'Beneficiaries', required: true },
@@ -52,7 +53,7 @@ const FIELD_CONFIG: { key: ContextFieldKey; label: string; required: boolean }[]
   { key: 'staff', label: 'Staff', required: false },
 ]
 
-const RICHNESS_WEIGHTS: Record<string, number> = { region: 20, crop: 20, beneficiaries: 20, budget: 20, staff: 15 }
+const RICHNESS_WEIGHTS: Record<string, number> = { goal: 15, region: 20, crop: 20, beneficiaries: 20, budget: 20, staff: 15 }
 
 const CROP_NAME_TOKENS = new Set(['crop', 'commodity', 'activity', 'livelihood', 'product', 'species', 'variety'])
 const REGION_NAME_TOKENS = new Set(['region', 'province', 'location', 'area', 'district', 'municipality', 'barangay', 'place', 'site', 'zone', 'address', 'city', 'town'])
@@ -226,7 +227,7 @@ export default function InputPage() {
     current: UploadPreview | null,
     capturedOverride?: string[],
   ) {
-    const REQUIRED = ['region', 'crop', 'beneficiaries']
+    const REQUIRED = ['goal', 'region', 'crop', 'beneficiaries']
     const res = await sendChat(history, current, capturedOverride ?? captured)
     const mergedCaptured = [...new Set([...(capturedOverride ?? captured), ...res.captured_fields])]
     setMessages((prev) => [...prev, { role: 'system', content: res.reply }])
@@ -250,7 +251,7 @@ export default function InputPage() {
    *  Status panel updates the instant the file is parsed. Returns the merged
    *  captured list so it can be forwarded to the backend as capturedOverride. */
   function applyExcelDetection(result: UploadPreview, currentCaptured: string[]): string[] {
-    const REQUIRED = ['region', 'crop', 'beneficiaries']
+    const REQUIRED = ['goal', 'region', 'crop', 'beneficiaries']
     const { fields: autoFields, values: autoValues } = detectExcelContext(result)
     if (autoFields.length === 0) return currentCaptured
     const merged = [...new Set([...currentCaptured, ...autoFields])]

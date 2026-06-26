@@ -13,6 +13,7 @@ export interface ContextPayload {
   run_id: string
   excel_data: ExcelRow[]
   chat_messages: ChatMessage[]
+  goal: string
 }
 
 export interface SourceMetadata {
@@ -134,6 +135,7 @@ export type ChipState = 'uploading' | 'parsed' | 'error'
 
 /** A row in the Context Status checklist. */
 export type ContextFieldKey =
+  | 'goal'
   | 'region'
   | 'crop'
   | 'beneficiaries'
