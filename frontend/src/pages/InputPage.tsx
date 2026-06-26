@@ -328,11 +328,22 @@ export default function InputPage() {
       <FloatingParticles />
       <TopNav showExplainer={showExplainer} onToggleExplainer={() => setShowExplainer(v => !v)} />
 
-      <main className="relative z-10 mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 flex-col overflow-hidden px-4 py-5 sm:px-6">
-        {showExplainer && (
-          <ExplainerBanner onClose={() => setShowExplainer(false)} />
-        )}
+      {/* Modal overlay — rendered outside <main> so it doesn't affect layout */}
+      {showExplainer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-ink/80 backdrop-blur-sm"
+          onClick={() => setShowExplainer(false)}
+        >
+          <div
+            className="w-full max-w-[560px]"
+            onClick={e => e.stopPropagation()}
+          >
+            <ExplainerBanner onClose={() => setShowExplainer(false)} />
+          </div>
+        </div>
+      )}
 
+      <main className="relative z-10 mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 flex-col overflow-hidden px-4 py-5 sm:px-6">
         {/* Desktop: 3-column workspace */}
         <div className="hidden min-h-0 flex-1 gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px] lg:grid-rows-[1fr]">
           <PanelCard
@@ -417,7 +428,7 @@ export default function InputPage() {
       <footer className="relative z-10 shrink-0 border-t border-white/10 bg-forest-ink/80 px-6 py-2 text-center text-[11px] text-mist-muted">
         <span className="font-semibold text-mist">Null Hypothesis</span>
         {' · '}
-        Built for the IBM Hackathon · Prototype — for demonstration purposes only · Not for production use
+        Built for Create &amp; Conquer · Prototype — for demonstration purposes only · Not for production use
       </footer>
     </div>
   )
