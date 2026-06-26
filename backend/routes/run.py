@@ -80,7 +80,10 @@ async def stream_agent_status(run_id: str):
                 "data": event.model_dump_json(),
             }
     
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/result/{run_id}")
