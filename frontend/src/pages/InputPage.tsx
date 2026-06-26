@@ -1,6 +1,15 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Sprout, FolderOpen, MessagesSquare, ListChecks, RotateCcw } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  FolderOpen,
+  ListChecks,
+  MessagesSquare,
+  RotateCcw,
+  Sprout,
+  X,
+} from 'lucide-react'
 import type {
   ChatMessage,
   ChipState,
@@ -22,7 +31,7 @@ const STORAGE_KEY = 'anikonsulta:chat-state'
 const INITIAL_MESSAGE: ChatMessage = {
   role: 'system',
   content:
-    "Upload your field data as a spreadsheet, or describe the program you need. I\u2019ll ask for whatever context is missing.",
+    "Upload your field data as a spreadsheet, or describe the program you need. I’ll ask for whatever context is missing.",
 }
 
 interface PersistedChatState {
@@ -60,7 +69,6 @@ const REGION_NAME_TOKENS = new Set(['region', 'province', 'location', 'area', 'd
 const BUDGET_NAME_TOKENS = new Set(['budget', 'fund', 'funding', 'cost', 'amount', 'allocation', 'expense'])
 const STAFF_NAME_TOKENS = new Set(['staff', 'worker', 'employee', 'personnel', 'extension', 'agent', 'officer'])
 
-// Known crop values for value-based detection when column name is non-standard
 const CROP_VALUES = new Set([
   'rice', 'corn', 'maize', 'palay', 'cassava', 'wheat', 'sorghum', 'sugarcane',
   'coconut', 'banana', 'mango', 'pineapple', 'coffee', 'cacao', 'abaca', 'tobacco',
@@ -81,13 +89,11 @@ function detectExcelContext(preview: UploadPreview): { fields: string[]; values:
   const fields: string[] = []
   const values: Record<string, string> = {}
 
-  // Row count → beneficiaries (always unambiguous)
   if (preview.rows > 0) {
     fields.push('beneficiaries')
     values['beneficiaries'] = `${preview.rows.toLocaleString()} (from survey rows)`
   }
 
-  // Count non-null values across ALL rows for a given header
   function fullCount(header: string): number {
     return preview.excelData.filter(r => {
       const v = r.data[header]
@@ -95,7 +101,6 @@ function detectExcelContext(preview: UploadPreview): { fields: string[]; values:
     }).length
   }
 
-  // Pass 1: column name token matching
   for (const header of preview.headers) {
     const tokens = colTokens(header)
     const val = firstVal(header, preview.sampleRows)
@@ -109,7 +114,6 @@ function detectExcelContext(preview: UploadPreview): { fields: string[]; values:
     if (!fields.includes('budget') && [...tokens].some(t => BUDGET_NAME_TOKENS.has(t)) && val) {
       fields.push('budget'); values['budget'] = val
     }
-    // Staff: use actual total count across all rows, not just the first sample value
     if (!fields.includes('staff') && [...tokens].some(t => STAFF_NAME_TOKENS.has(t))) {
       const count = fullCount(header)
       if (count > 0) {
@@ -119,7 +123,6 @@ function detectExcelContext(preview: UploadPreview): { fields: string[]; values:
     }
   }
 
-  // Pass 2: value-based crop detection for non-standard column names
   if (!fields.includes('crop')) {
     for (const header of preview.headers) {
       const val = firstVal(header, preview.sampleRows)
@@ -151,7 +154,6 @@ export default function InputPage() {
   const location = useLocation()
   const navState = location.state as ReviewNavState | null
 
-  // Seed state from navState (back-navigation) → then persisted localStorage → then defaults
   const persisted = navState ? null : loadPersistedChat()
 
   const [messages, setMessages] = useState<ChatMessage[]>(
@@ -174,12 +176,9 @@ export default function InputPage() {
   const [contextRichness, setContextRichness] = useState(
     navState ? 0 : (persisted?.contextRichness ?? 0),
   )
-  const [showExplainer, setShowExplainer] = useState(
-    () => localStorage.getItem('anikonsulta:seen-explainer') !== '1',
-  )
+  // Always show guide on page load — user can toggle with the nav button
+  const [showExplainer, setShowExplainer] = useState(true)
 
-  // Persist chat state to localStorage whenever it changes.
-  // Skip the very first render to avoid overwriting persisted state with defaults.
   const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) {
@@ -202,11 +201,6 @@ export default function InputPage() {
     setContextRichness(0)
   }
 
-  function dismissExplainer() {
-    localStorage.setItem('anikonsulta:seen-explainer', '1')
-    setShowExplainer(false)
-  }
-
   const fields: ContextField[] = useMemo(
     () =>
       FIELD_CONFIG.map((cfg) => ({
@@ -219,9 +213,6 @@ export default function InputPage() {
     [captured, fieldValues],
   )
 
-  /** Send one chat turn and fold the assistant's reply + state into the UI.
-   *  capturedOverride lets callers pass a pre-merged captured list (e.g. after
-   *  immediate Excel detection) so the backend sees the right [ALREADY CAPTURED]. */
   async function runChatTurn(
     history: ChatMessage[],
     current: UploadPreview | null,
@@ -234,22 +225,17 @@ export default function InputPage() {
     setCaptured(mergedCaptured)
     setFieldValues((prev) => ({ ...prev, ...res.field_values }))
     setMissingRequired(res.missing_required)
-    // Button appears as soon as all 3 required fields are captured — don't wait for optional fields
     setReady(REQUIRED.every((f) => mergedCaptured.includes(f)))
     setContextRichness(res.context_richness)
   }
 
-  /** Confirmation line so the user always sees the spreadsheet was processed. */
   function confirmMessage(p: UploadPreview): ChatMessage {
     return {
       role: 'system',
-      content: `Spreadsheet ready: ${p.rows.toLocaleString()} rows × ${p.cols} columns. Add any extra context, or press “Generate program” when you're ready.`,
+      content: `Spreadsheet ready: ${p.rows.toLocaleString()} rows × ${p.cols} columns. Add any extra context, or press "Generate program" when you're ready.`,
     }
   }
 
-  /** Apply Excel auto-detection immediately (before the LLM call) so the Context
-   *  Status panel updates the instant the file is parsed. Returns the merged
-   *  captured list so it can be forwarded to the backend as capturedOverride. */
   function applyExcelDetection(result: UploadPreview, currentCaptured: string[]): string[] {
     const REQUIRED = ['goal', 'region', 'crop', 'beneficiaries']
     const { fields: autoFields, values: autoValues } = detectExcelContext(result)
@@ -340,11 +326,14 @@ export default function InputPage() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <FloatingParticles />
-      <TopNav />
+      <TopNav showExplainer={showExplainer} onToggleExplainer={() => setShowExplainer(v => !v)} />
 
       <main className="relative z-10 mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 flex-col overflow-hidden px-4 py-5 sm:px-6">
-        {showExplainer && <ExplainerBanner onDismiss={dismissExplainer} />}
-        {/* Desktop: 3-column workspace fills all remaining height after banner */}
+        {showExplainer && (
+          <ExplainerBanner onClose={() => setShowExplainer(false)} />
+        )}
+
+        {/* Desktop: 3-column workspace */}
         <div className="hidden min-h-0 flex-1 gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_320px] lg:grid-rows-[1fr]">
           <PanelCard
             icon={<FolderOpen size={16} strokeWidth={1.6} />}
@@ -387,7 +376,7 @@ export default function InputPage() {
           </PanelCard>
         </div>
 
-        {/* Tablet / mobile: stacked, chat first — scrolls within the fixed viewport */}
+        {/* Tablet / mobile: stacked */}
         <div className="flex flex-col gap-4 overflow-y-auto pb-4 lg:hidden">
           <PanelCard
             icon={<MessagesSquare size={16} strokeWidth={1.6} />}
@@ -424,13 +413,25 @@ export default function InputPage() {
           </PanelCard>
         </div>
       </main>
+
+      <footer className="relative z-10 shrink-0 border-t border-white/10 bg-forest-ink/80 px-6 py-2 text-center text-[11px] text-mist-muted">
+        <span className="font-semibold text-mist">Null Hypothesis</span>
+        {' · '}
+        Built for the IBM Hackathon · Prototype — for demonstration purposes only · Not for production use
+      </footer>
     </div>
   )
 }
 
-// ── Top navigation ─────────────────────────────────────────────────────────
+// ── Top navigation ────────────────────────────────────────────────────────────
 
-function TopNav() {
+function TopNav({
+  showExplainer,
+  onToggleExplainer,
+}: {
+  showExplainer: boolean
+  onToggleExplainer: () => void
+}) {
   return (
     <header className="glass sticky top-0 z-20 border-b border-white/10 bg-forest-deep/95 backdrop-blur-sm">
       <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-5 sm:px-6">
@@ -467,43 +468,114 @@ function TopNav() {
           </Link>
         </nav>
 
-        <Link
-          to="/sources"
-          className="pill border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white transition-all duration-300 hover:border-leaf hover:bg-white/20 hover:scale-105 hover:shadow-glow"
-        >
-          Manage sources
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleExplainer}
+            className="pill border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-medium text-white transition-all duration-200 hover:border-leaf hover:bg-white/20"
+          >
+            {showExplainer ? 'Hide guide' : 'Guide'}
+          </button>
+          <Link
+            to="/sources"
+            className="pill border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white transition-all duration-300 hover:border-leaf hover:bg-white/20 hover:scale-105 hover:shadow-glow"
+          >
+            Manage sources
+          </Link>
+        </div>
       </div>
     </header>
   )
 }
 
-// ── Explainer banner ──────────────────────────────────────────────────────
+// ── Explainer banner ──────────────────────────────────────────────────────────
 
-function ExplainerBanner({ onDismiss }: { onDismiss: () => void }) {
+const STEPS = [
+  {
+    label: 'Chat / Upload',
+    detail:
+      'Upload your field data (.xlsx) or describe your situation in the chat. The assistant asks for anything missing — region, crop, beneficiaries, and goal.',
+  },
+  {
+    label: 'Review',
+    detail:
+      'Once all required fields appear in Context Status, click "Generate program →" in the chat to reach the review screen. Confirm or go back to add more detail.',
+  },
+  {
+    label: 'Agents',
+    detail:
+      'Five specialist agents run live in parallel — evidence retrieval, data analysis, intervention adaptation, risk assessment, and synthesis.',
+  },
+  {
+    label: 'Program',
+    detail:
+      'Your program appears with KPIs, risk flags, budget estimate, citations, and an "Adaptations made" section showing exactly what was tailored for your context.',
+  },
+]
+
+function ExplainerBanner({ onClose }: { onClose: () => void }) {
   return (
-    <div className="card-surface mb-5 flex items-start gap-4 rounded-card border border-leaf/30 bg-leaf-soft/40 p-5 animate-rise">
-      <Sprout size={20} strokeWidth={1.7} className="mt-0.5 shrink-0 text-forest" />
-      <div className="flex-1">
-        <h2 className="font-display text-[15px] font-semibold text-primary">How this works</h2>
-        <ol className="mt-2 space-y-1.5 text-[13px] text-secondary">
-          <li>1. Upload your field data (Excel) or describe it in chat.</li>
-          <li>2. A team of specialist agents analyzes it against verified evidence — you'll watch them work, live.</li>
-          <li>3. You get a complete program with every claim traced to a source, plus a list of what was adapted for your context.</li>
-        </ol>
+    <div className="mb-5 rounded-card border border-white/10 bg-forest-ink p-5 animate-rise">
+      {/* Prototype warning */}
+      <div className="mb-4 flex items-center gap-2 rounded-xl border border-gold/30 bg-gold-soft/10 px-3 py-2">
+        <AlertTriangle size={14} strokeWidth={1.8} className="shrink-0 text-gold" />
+        <span className="text-[12px] text-gold">
+          Prototype — expect occasional bugs. Refresh and retry if something stalls.
+        </span>
       </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="shrink-0 rounded-full px-2 py-1 text-[12px] text-secondary transition-colors hover:bg-cream hover:text-primary"
-      >
-        Got it
-      </button>
+
+      {/* Header row */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-display text-[15px] font-semibold text-mist">How to use AniKonsulta</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close guide"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-mist-muted transition-colors hover:bg-white/10 hover:text-mist"
+        >
+          <X size={15} strokeWidth={1.8} />
+        </button>
+      </div>
+
+      {/* Step flow */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {STEPS.map((s, i) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-leaf text-[10px] font-bold text-white">
+                {i + 1}
+              </span>
+              <span className="text-[12px] font-medium text-mist">{s.label}</span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <ArrowRight size={12} strokeWidth={2} className="text-mist-muted" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Expanded steps */}
+      <ol className="space-y-2">
+        {STEPS.map((s, i) => (
+          <li key={s.label} className="flex gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-leaf/20 text-[10px] font-bold text-leaf-bright">
+              {i + 1}
+            </span>
+            <p className="text-[12px] leading-relaxed text-mist-muted">{s.detail}</p>
+          </li>
+        ))}
+      </ol>
+
+      {/* Tips */}
+      <p className="mt-4 border-t border-white/10 pt-3 text-[11px] text-mist-muted">
+        <span className="font-medium text-mist">Tips:</span>{' '}
+        The chat reads your spreadsheet and can answer questions about the data · Upload PDFs or reports via Sources to give agents more context · Use Compare View to see how the program changes across two different local contexts
+      </p>
     </div>
   )
 }
 
-// ── Panel card wrapper ───────────────────────────────────────────────────────
+// ── Panel card wrapper ────────────────────────────────────────────────────────
 
 function PanelCard({
   icon,
