@@ -47,7 +47,8 @@ export function useAgentStream(runId: string | null) {
     setError(false)
     doneRef.current = false
 
-    const es = new EventSource(`/api/stream/${encodeURIComponent(runId)}`)
+    const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
+    const es = new EventSource(`${API_BASE}/stream/${encodeURIComponent(runId)}`)
 
     const finish = (failed: boolean) => {
       if (doneRef.current) return
